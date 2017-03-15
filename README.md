@@ -1,6 +1,6 @@
 # BackStageSur
 服务器监控程序WCF客户端
-** 注意：** *此版本为终极测试版本*
+**注意：** *此版本为终极测试版本*
 ## 3.15：
 ### 新增登录方法
 ` int Login(string clientid,string pswd) `
