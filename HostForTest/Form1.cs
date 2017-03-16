@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Data;
-using System.Data.Common;
 using System.ServiceModel;
 using System.ServiceModel.Description;
 using System.Windows.Forms;
@@ -8,6 +7,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Threading;
+using System.Runtime.Serialization;
 
 
 
@@ -15,7 +15,7 @@ using System.Threading;
 
 namespace BackStageSur
 {
-
+    using HoraceOriginal;
     [ServiceBehavior(IncludeExceptionDetailInFaults = true)]
     public partial class FrmMain : Form
     {
@@ -61,6 +61,8 @@ namespace BackStageSur
         //}
     }
 
+
+    
     [ServiceBehavior(IncludeExceptionDetailInFaults = true)]
     public class cl : Icl
 
@@ -97,8 +99,8 @@ namespace BackStageSur
 
         public DataSet GetServer(string p)//服务器列表方法
         {
-            //try
-            //{
+            try
+            {
                 string sqlstrGtSer = "select serverid,name,type,url from ser.tb_server where cleintid='" + p + "'";
                 Npgsql.NpgsqlConnection myconnGtSer = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSer, myconnGtSer);
@@ -109,20 +111,26 @@ namespace BackStageSur
                 myda.Fill(dtGtSer);
                 dsGtSer.Tables.Add(dtGtSer);
                 return dsGtSer;
-            //}
-            //catch(TimeoutException tex)
-            //{
-            //    MessageBox.Show(tex.Message.ToString());
-                
-            //    Exception ex=new Exception("连接超时");
-            //    return null;
-            //    throw ex;
+            }
+            catch (TimeoutException tex)
+            {
+                MessageBox.Show(tex.Message.ToString());
+
+                Exception ex = new Exception("连接超时");
+                return null;
+                throw ex;
 
 
-                
 
-            //}
-            
+
+            }
+            catch (Npgsql.NpgsqlException ne)
+            {
+                var error = new WCFError("Select", ne.Message.ToString());
+                throw new FaultException<WCFError>(error,error.Message);
+
+            }
+
         }
         public int PingSer(string serid,IPAddress Address,ref long RtT,ref int Ttl,bool DF,ref int BfL)//同步Ping方法
         {
@@ -167,8 +175,9 @@ namespace BackStageSur
                 }
                 catch (Npgsql.NpgsqlException ne)
                 {
-                   throw ne;
-                  
+                    var error = new WCFError("Insert", ne.Message.ToString());
+                    throw new FaultException<WCFError>(error, error.Message);
+
                 }
                     
                     
@@ -187,7 +196,7 @@ namespace BackStageSur
             else
                 return 1;
         }
-        public static void PingSerAsync(string[] args)
+        public static void PingSerAsync(string[] args, ref long RtT, ref int Ttl, bool DF, ref int BfL)
         {
             if (args.Length == 0)
                 throw new ArgumentException("Ping needs a host or IP Address.");
@@ -282,7 +291,7 @@ namespace BackStageSur
     }
 
 
-    [ServiceContract]
+    [ServiceContract(Namespace = "Horace")]
 
     public interface Icl
     {
@@ -291,8 +300,38 @@ namespace BackStageSur
         
         int Login(string p, string pswd);
         [OperationContract]
+        [FaultContract(typeof(WCFError))]
         DataSet GetServer(string p);
         [OperationContract]
+
         int PingSer(string serid, IPAddress Address, ref long RtT, ref int Ttl, bool DF, ref int BfL);
     }
+}
+namespace HoraceOriginal
+{
+    [DataContractAttribute(Namespace ="Horace")]
+        public class WCFError
+        {
+            public WCFError(string operation, string message)
+            {
+            if (string.IsNullOrEmpty(operation))
+                         {
+                             throw new ArgumentNullException("operation");
+                         }
+                      if (string.IsNullOrEmpty(message))
+                          {
+                               throw new ArgumentNullException("message");
+                         }
+
+            Operation = operation;
+              this.Message = message;
+           }
+          [DataMember]
+            public string Operation
+          { get; set; }
+           [DataMember]
+           public string Message
+           { get; set; }
+       }
+
 }
