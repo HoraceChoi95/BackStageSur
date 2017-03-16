@@ -1,17 +1,12 @@
 ﻿using System;
 using System.Data;
+using System.Data.Common;
 using System.ServiceModel;
 using System.ServiceModel.Description;
 using System.Windows.Forms;
-using System;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
-using System;
-using System.Text;
-using System.Net;
-using System.Net.NetworkInformation;
-using System.ComponentModel;
 using System.Threading;
 
 
@@ -20,6 +15,8 @@ using System.Threading;
 
 namespace BackStageSur
 {
+
+    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]
     public partial class FrmMain : Form
     {
         public FrmMain()
@@ -64,10 +61,12 @@ namespace BackStageSur
         //}
     }
 
-    
+    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]
     public class cl : Icl
+
     {
-        public const string connstr = "Server=172.16.30.145;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
+
+        public const string connstr = "Server=124.161.78.133;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
         public int Login(string p,string pswd)//登录方法
         {
             string sqlstrlgn = "select passwd from ser.tb_login where cleintid='" + p + "'";//选择clientid相对应的MD5
@@ -98,23 +97,39 @@ namespace BackStageSur
 
         public DataSet GetServer(string p)//服务器列表方法
         {
-            string sqlstrGtSer = "select serverid,name,type,url from ser.tb_server where cleintid='" + p + "'";
-            Npgsql.NpgsqlConnection myconnGtSer = new Npgsql.NpgsqlConnection(connstr);
-            Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSer, myconnGtSer);
-            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSer, myconnGtSer);
-            myconnGtSer.Open();
-            DataTable dtGtSer = new DataTable();
-            DataSet dsGtSer = new DataSet();
-            myda.Fill(dtGtSer);
-            dsGtSer.Tables.Add(dtGtSer);
-            return dsGtSer;
+            //try
+            //{
+                string sqlstrGtSer = "select serverid,name,type,url from ser.tb_server where cleintid='" + p + "'";
+                Npgsql.NpgsqlConnection myconnGtSer = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSer, myconnGtSer);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSer, myconnGtSer);
+                myconnGtSer.Open();
+                DataTable dtGtSer = new DataTable();
+                DataSet dsGtSer = new DataSet();
+                myda.Fill(dtGtSer);
+                dsGtSer.Tables.Add(dtGtSer);
+                return dsGtSer;
+            //}
+            //catch(TimeoutException tex)
+            //{
+            //    MessageBox.Show(tex.Message.ToString());
+                
+            //    Exception ex=new Exception("连接超时");
+            //    return null;
+            //    throw ex;
+
+
+                
+
+            //}
+            
         }
-        public int PingSer(string serid,IPAddress Address,ref long RtT,ref int Ttl,bool DF,ref int BfL)//同步Ping
+        public int PingSer(string serid,IPAddress Address,ref long RtT,ref int Ttl,bool DF,ref int BfL)//同步Ping方法
         {
             Ping pingSender = new Ping();
             PingOptions options = new PingOptions();
 
-            // Use the default Ttl value which is 128,
+            // 使用默认TTL值128,
             // but change the fragmentation behavior.
             options.DontFragment = true;
            
@@ -122,7 +137,7 @@ namespace BackStageSur
             string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
             byte[] buffer = Encoding.ASCII.GetBytes(data);
             int timeout = 120;
-            PingReply reply = pingSender.Send(Address, timeout, buffer, options);// args[0] can be an IPaddress or host name.
+            PingReply reply = pingSender.Send(Address, timeout, buffer, options);
             if (reply.Status == IPStatus.Success)
             {
                 Console.WriteLine("Address: {0}", reply.Address.ToString());
@@ -138,17 +153,26 @@ namespace BackStageSur
 #region  向数据库写入数据
                 string MetData = "INSERT INTO ser.data(serverid, rtt, ttl, df, bfl, \"time\", )VALUES(@serverid, @rtt, @ttl, @df, @bfl, @time ) ; ";
                 Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(data, myconnping);
+                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
                 myconnping.Open();
-                //try
-                //{
+                try
+                {
                     mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serid;
                     mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                     mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
                     mycommping.Parameters.Add("@df", NpgsqlTypes.NpgsqlDbType.Boolean).Value = DF;
                     mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
                     mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
-                    mycommping.ExecuteNonQuery();
+                    int stat = mycommping.ExecuteNonQuery();
+                }
+                catch (Npgsql.NpgsqlException ne)
+                {
+                   throw ne;
+                  
+                }
+                    
+                    
+                
                     myconnping.Close();
                 //}
 
@@ -259,12 +283,16 @@ namespace BackStageSur
 
 
     [ServiceContract]
+
     public interface Icl
     {
+
         [OperationContract]
         
         int Login(string p, string pswd);
+        [OperationContract]
         DataSet GetServer(string p);
-        int PingSer(IPAddress Address, ref long RtT, ref int Ttl, bool DF, ref int BfL);
+        [OperationContract]
+        int PingSer(string serid, IPAddress Address, ref long RtT, ref int Ttl, bool DF, ref int BfL);
     }
 }
