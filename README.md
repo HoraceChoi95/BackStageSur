@@ -8,6 +8,9 @@
 ### 新增单个服务器异步ping方法
 `static void PingSerAsync(string[] args, ref long RtT, ref int Ttl, bool DF, ref int BfL) ` 
  **注意：** 方法因还在修改暂时未添加到操作绑定，无法调用.
+### 新增报错机制
+为服务器选择方法添加报错机制，现在在客户端捕获封装好的FaultException错误类型即可获知服务端错误梗概,详细说明在代码的注释中，使用方法请看WCF-Error中的示例代码.
+
 ## 3.15：
 ### 新增登录方法
 ` int Login(string clientid,string pswd) `
