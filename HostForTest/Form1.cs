@@ -15,8 +15,8 @@ using System.Runtime.Serialization;
 
 namespace BackStageSur
 {
-    using HoraceOriginal;
-    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]
+    using HoraceOriginal;//添加引用WCFError错误类
+    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]//返回详细错误信息开启
     public partial class FrmMain : Form
     {
         public FrmMain()
@@ -63,7 +63,7 @@ namespace BackStageSur
 
 
     
-    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]
+    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]//返回详细错误信息开启
     public class cl : Icl
 
     {
@@ -112,22 +112,11 @@ namespace BackStageSur
                 dsGtSer.Tables.Add(dtGtSer);
                 return dsGtSer;
             }
-            catch (TimeoutException tex)
+            
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
             {
-                MessageBox.Show(tex.Message.ToString());
-
-                Exception ex = new Exception("连接超时");
-                return null;
-                throw ex;
-
-
-
-
-            }
-            catch (Npgsql.NpgsqlException ne)
-            {
-                var error = new WCFError("Select", ne.Message.ToString());
-                throw new FaultException<WCFError>(error,error.Message);
+                var error = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(error,error.Message);//抛出错误
 
             }
 
@@ -173,29 +162,22 @@ namespace BackStageSur
                     mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                     int stat = mycommping.ExecuteNonQuery();
                 }
-                catch (Npgsql.NpgsqlException ne)
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                 {
-                    var error = new WCFError("Insert", ne.Message.ToString());
-                    throw new FaultException<WCFError>(error, error.Message);
+                    var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
 
                 }
-                    
-                    
+                myconnping.Close();    
                 
-                    myconnping.Close();
-                //}
-
-
 #endregion
-
-
-
-
-                return 0;
+            return 0;
             }
             else
                 return 1;
         }
+
+
         public static void PingSerAsync(string[] args, ref long RtT, ref int Ttl, bool DF, ref int BfL)
         {
             if (args.Length == 0)
@@ -300,7 +282,7 @@ namespace BackStageSur
         
         int Login(string p, string pswd);
         [OperationContract]
-        [FaultContract(typeof(WCFError))]
+        [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
         DataSet GetServer(string p);
         [OperationContract]
 
