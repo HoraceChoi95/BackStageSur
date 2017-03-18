@@ -71,29 +71,43 @@ namespace BackStageSur
         public const string connstr = "Server=124.161.78.133;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
         public int Login(string p,string pswd)//登录方法
         {
-            string sqlstrlgn = "select passwd from ser.tb_login where cleintid='" + p + "'";//选择clientid相对应的MD5
-            Npgsql.NpgsqlConnection myconnlgn = new Npgsql.NpgsqlConnection(connstr);
-            Npgsql.NpgsqlCommand mycommlgn = new Npgsql.NpgsqlCommand(sqlstrlgn, myconnlgn);
+            try
+            {
+                string sqlstrlgn = "select passwd from ser.tb_login where cleintid='" + p + "'";//选择clientid相对应的MD5
+                Npgsql.NpgsqlConnection myconnlgn = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommlgn = new Npgsql.NpgsqlCommand(sqlstrlgn, myconnlgn);
 
-            //Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstr, myconn);
-            myconnlgn.Open();
-            //DataTable dt = new DataTable();
-            //DataSet ds = new DataSet();
-            //myda.Fill(dt);
-            //ds.Tables.Add(dt);
-            string comp = mycommlgn.ExecuteScalar().ToString();  // TODO:test  //MD5赋值给临时变量
-            myconnlgn.Close();
-            myconnlgn.Dispose();
-            if (comp == "" || comp == null)//判断是否有对应MD5
-            {
-                return 2;
+                //Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstr, myconn);
+                myconnlgn.Open();
+                //DataTable dt = new DataTable();
+                //DataSet ds = new DataSet();
+                //myda.Fill(dt);
+                //ds.Tables.Add(dt);
+                string comp = mycommlgn.ExecuteScalar().ToString();  // TODO:test  //MD5赋值给临时变量
+                myconnlgn.Close();
+                myconnlgn.Dispose();
+                if (comp == "" || comp == null)//判断是否有对应MD5
+                {
+                    return 2;
+                }
+                else if (comp == pswd)//判断相等
+                {
+                    return 0;
+                }
+                else return 1;
             }
-            else if (comp == pswd)//判断相等
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
             {
-                return 0;
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
             }
-            else return 1;
-            
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+
         }
        
 
@@ -115,10 +129,16 @@ namespace BackStageSur
             
             catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
             {
-                var error = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                throw new FaultException<WCFError>(error,error.Message);//抛出错误
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror,nerror.Message);//抛出错误
 
             }
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+            
 
         }
         public int PingSer(string serid,IPAddress Address,ref long RtT,ref int Ttl,bool DF,ref int BfL)//同步Ping方法
@@ -137,24 +157,25 @@ namespace BackStageSur
             PingReply reply = pingSender.Send(Address, timeout, buffer, options);
             if (reply.Status == IPStatus.Success)
             {
-                Console.WriteLine("Address: {0}", reply.Address.ToString());
+                //Console.WriteLine("Address: {0}", reply.Address.ToString());
 
-                Console.WriteLine("RoundTrip time: {0}", reply.RoundtripTime);
+                //Console.WriteLine("RoundTrip time: {0}", reply.RoundtripTime);
                 RtT = reply.RoundtripTime;
-                Console.WriteLine("Time to live: {0}", reply.Options.Ttl);
+                //Console.WriteLine("Time to live: {0}", reply.Options.Ttl);
                 Ttl = reply.Options.Ttl;
-                Console.WriteLine("Don't fragment: {0}", reply.Options.DontFragment);
+                //Console.WriteLine("Don't fragment: {0}", reply.Options.DontFragment);
                 DF = reply.Options.DontFragment;
-                Console.WriteLine("Buffer size: {0}", reply.Buffer.Length);
+                //Console.WriteLine("Buffer size: {0}", reply.Buffer.Length);
                 BfL = reply.Buffer.Length;
-#region  向数据库写入数据
-                string MetData = "INSERT INTO ser.data(serverid, rtt, ttl, df, bfl, \"time\", )VALUES(@serverid, @rtt, @ttl, @df, @bfl, @time ) ; ";
+                #region  向数据库写入数据
+                string MetData = "INSERT INTO ser.tb_data(serverid,success, rtt, ttl, df, bfl, \"time\" )VALUES(@serverid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                 Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
                 myconnping.Open();
                 try
                 {
                     mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serid;
+                    mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = Convert.ToBoolean((reply.Status == IPStatus.Success));
                     mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                     mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
                     mycommping.Parameters.Add("@df", NpgsqlTypes.NpgsqlDbType.Boolean).Value = DF;
@@ -164,14 +185,15 @@ namespace BackStageSur
                 }
                 catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                 {
+                    //TODO：向数据库写入失败数据
                     var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                     throw new FaultException<WCFError>(error, error.Message);//抛出错误
 
                 }
-                myconnping.Close();    
-                
-#endregion
-            return 0;
+                myconnping.Close();
+
+                #endregion
+                return 0;
             }
             else
                 return 1;
