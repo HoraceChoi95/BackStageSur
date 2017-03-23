@@ -60,13 +60,7 @@ namespace BackStageSur
 
         }
 
-        //private void bt_httpGet_Click(object sender, EventArgs e)
-        //{
-        //    // [ServiceContract] 
 
-        //    WebClient wc = new WebClient();
-
-        //}
     }
 
 
