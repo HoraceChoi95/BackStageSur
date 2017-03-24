@@ -1,21 +1,14 @@
 ﻿using System;
 using System.Data;
-using System.ServiceModel;
-using System.ServiceModel.Description;
-using System.Windows.Forms;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Text;
-using System.Threading;
-using System.Runtime.Serialization;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Net.Sockets;
-using System.Net;
+using System.Runtime.Serialization;
+using System.ServiceModel;
+using System.ServiceModel.Description;
+using System.Text;
 using System.Threading;
+using System.Windows.Forms;
 
 
 
@@ -65,7 +58,9 @@ namespace BackStageSur
 
 
 
-    [ServiceBehavior(IncludeExceptionDetailInFaults = true)]//返回详细错误信息开启
+    [ServiceBehavior(IncludeExceptionDetailInFaults = true, ConcurrencyMode = ConcurrencyMode.Multiple)]//返回详细错误信息开启,开启多线程
+
+    
     public class cl : Icl
 
     {
@@ -143,7 +138,10 @@ namespace BackStageSur
 
 
         }
-        public int PingService(int serviceid, ref long RtT)//同步Ping方法
+        public delegate int ScndPing(int serviceid, ref long RtT);
+        ScndPing SPing;
+        public Thread p;
+        public int ping(int serviceid, ref long RtT)
         {
             #region 从数据库中读取数据
             string dat = "select tb_netboard.netboardid,servicetype,url,port,connstring from tb_netboard inner join tb_service on tb_netboard.netboardid=tb_service.netboardid where tb_service.serviceid=" + serviceid + "";
@@ -169,7 +167,8 @@ namespace BackStageSur
                 string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
                 byte[] buffer = Encoding.ASCII.GetBytes(data);
                 int timeout = 120;
-                IPAddress Address = IPAddress.Parse(url + ":" + port);
+                IPAddress Address = IPAddress.Parse(url);// + ":" + port
+                //Thread ping = new Thread(pingservice);
                 PingReply reply = pingSender.Send(Address, timeout, buffer, options);
                 if (reply.Status == IPStatus.Success)
                 {
@@ -182,14 +181,14 @@ namespace BackStageSur
 
                     int BfL = reply.Buffer.Length;
                     #region  向数据库写入成功数据
-                    string MetData = "INSERT INTO ser.tb_data(netboardid,serviceid,success, rtt, ttl, df, bfl, \"time\" )VALUES(@netboardid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time); ";
+                    string MetData = "INSERT INTO sur.tb_data(netboradid,serviceid,success, rtt, ttl, df, bfl, \"time\" )VALUES(@netboradid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
                     myconnping.Open();
                     try
                     {
                         mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
+                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -201,7 +200,7 @@ namespace BackStageSur
                     catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                     {
                         var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                       throw new FaultException<WCFError>(error, error.Message);//抛出错误
 
                     }
                     myconnping.Close();
@@ -211,9 +210,46 @@ namespace BackStageSur
                 }
                 else
                 {
+
+                    return 1;
+                }
+            }
+            else return 1;
+            //if (servicetype == "数据库服务器")
+            //{
+
+            //}
+        }
+        int i=1;
+        long tRtT = 0;
+        
+            
+
+            
+        
+        public int PingService(int serviceid, ref long RtT)//同步Ping方法
+        {
+            int[] a = new int[2] { serviceid, Convert.ToInt16(RtT) };
+ 
+
+            SPing = new ScndPing(ping);
+            int s = 0;
+            while (s != 2)
+            {
+                i = SPing.Invoke(serviceid, ref tRtT);
+
+                s += 1;
+
+                if (i == 1 && s == 1)
+                {
+
+                    Thread.Sleep(2000);
+                }
+                else if (i == 1 && s == 2)
+                {
                     #region  向数据库写入失败数据
-                    string ErrData = "INSERT INTO ser.tb_error(netboardid,serviceid,success, rtt, ttl, df, bfl, \"time\"，handled )VALUES(@netboardid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time, @handled); ";
-                    string MetData = "INSERT INTO ser.tb_data(netboardid,serviceid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboardid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboradid,serviceid,success, rtt, ttl, df, bfl, \"time\"，handled )VALUES(@netboradid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time, @handled); ";
+                    string MetData = "INSERT INTO sur.tb_data(netboradid,serviceid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboradid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
                     myconnping.Open();
@@ -224,7 +260,7 @@ namespace BackStageSur
                     try
                     {
                         mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
+                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -236,7 +272,7 @@ namespace BackStageSur
 
                         mycommping.CommandText = MetData;
                         mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
+                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -253,18 +289,24 @@ namespace BackStageSur
                     myconnping.Close();
 
                     #endregion
-                    return 1;
                 }
-            }
-            else if (servicetype == "数据库服务器")
-            {
+                else break;
+                
+                
 
             }
+            
+            RtT = tRtT;
+            return i;
 
         }
 
+        private void pingservice()
+        {
+            throw new NotImplementedException();
+        }
     }
-
+    
 
         [ServiceContract(Namespace = "Horace")]
 
@@ -318,7 +360,7 @@ namespace UDP_Server
     class Program
     {
         static Socket server;
-        static void Main(string[] args)
+        static void Send(string[] args)
         {
             server = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
