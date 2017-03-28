@@ -1,5 +1,12 @@
 # BackStageSur
 服务器监控程序WCF客户端（Ping分支）
+## 3.24:
+###  PingService容错机制更新 
+PingService方法更新：`int PingService(int serviceid, ref long RtT)`
+Ping服务现在会从数据库中读取服务类型，根据不同类型进行不同方式的测试.在第一次Ping之后会休眠2秒后再次Ping服务，如果仍不成功，才会向数据库写入数据并返回1.
+已知问题：PingService只支持IP,不支持带有端口号的Host.现在只能测试Web服务，不能测试FTP和数据库（会返回失败）.
+### WCF服务端属性更新
+现在WCF应用是多线程应用了.
 ## 3.16:
 ### 新增单个服务器同步ping方法
 `int PingSer(string serid,IPAddress Address,ref long RtT,ref int Ttl,bool DF,ref int BfL) ` 
