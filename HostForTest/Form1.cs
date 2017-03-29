@@ -108,20 +108,33 @@ namespace BackStageSur
         }
 
 
-        public DataSet GetServer(string p)//服务器列表方法
+        public DataSet Intialize(string p)//服务器列表方法
         {
             try
             {
-                string sqlstrGtSer = "select serverid,name,type,url from ser.tb_server where cleintid='" + p + "'";
-                Npgsql.NpgsqlConnection myconnGtSer = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSer, myconnGtSer);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSer, myconnGtSer);
-                myconnGtSer.Open();
+                string s = p;
+                string sqlstrGtSrvr = "select * from ser.tb_server where cleintid='" + s + "'";
+                string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
+                string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,connstring from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
+                Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
+                myconnInit.Open();
                 DataTable dtGtSer = new DataTable();
-                DataSet dsGtSer = new DataSet();
+                DataSet dsInit = new DataSet();
                 myda.Fill(dtGtSer);
-                dsGtSer.Tables.Add(dtGtSer);
-                return dsGtSer;
+                mycommGtSer.CommandText = sqlstrGtNetbd;
+                myda.SelectCommand.CommandText = sqlstrGtNetbd;
+                DataTable dtGtNetbd = new DataTable();
+                myda.Fill(dtGtNetbd);
+                mycommGtSer.CommandText = sqlstrGtSrvis;
+                myda.SelectCommand.CommandText = sqlstrGtSrvis;
+                DataTable dtGtSrvis = new DataTable();
+                myda.Fill(dtGtSrvis);
+                dsInit.Tables.Add(dtGtSer);
+                dsInit.Tables.Add(dtGtNetbd);
+                dsInit.Tables.Add(dtGtSrvis);
+                return dsInit;
             }
 
             catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
@@ -138,9 +151,9 @@ namespace BackStageSur
 
 
         }
-        public delegate int ScndPing(int serviceid, ref long RtT);
-        ScndPing SPing;
-        public Thread p;
+        public delegate int ScndPing(int serviceid, ref long RtT);//定义委托
+        ScndPing SPing;//声明委托
+        int netboardid = 0;
         public int ping(int serviceid, ref long RtT)
         {
             #region 从数据库中读取数据
@@ -150,7 +163,7 @@ namespace BackStageSur
             Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
             DataTable dt = new DataTable();
             myda.Fill(dt);
-            int netboardid = Convert.ToInt16(dt.Rows[0][0]);
+            netboardid = Convert.ToInt16(dt.Rows[0][0]);
             string servicetype = dt.Rows[0][1].ToString().Trim();
             string url = dt.Rows[0][2].ToString().Trim();
             string port = dt.Rows[0][3].ToString().Trim();
@@ -228,24 +241,21 @@ namespace BackStageSur
             
         
         public int PingService(int serviceid, ref long RtT)//同步Ping方法
-        {
-            int[] a = new int[2] { serviceid, Convert.ToInt16(RtT) };
- 
-
-            SPing = new ScndPing(ping);
-            int s = 0;
+        {            
+            SPing = new ScndPing(ping);//把函数指定给委托
+            int s = 0;//循环计数器初始化
             while (s != 2)
             {
-                i = SPing.Invoke(serviceid, ref tRtT);
+                i = SPing.Invoke(serviceid, ref tRtT);//同步执行委托
 
-                s += 1;
+                s += 1;//计数器加一
 
                 if (i == 1 && s == 1)
                 {
 
-                    Thread.Sleep(2000);
+                    Thread.Sleep(2000);//第一次不成功，睡眠2秒
                 }
-                else if (i == 1 && s == 2)
+                else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
                 {
                     #region  向数据库写入失败数据
                     string ErrData = "INSERT INTO sur.tb_error(netboradid,serviceid,success, rtt, ttl, df, bfl, \"time\"，handled )VALUES(@netboradid,@serviceid, @success, @rtt, @ttl, @df, @bfl, @time, @handled); ";
@@ -290,21 +300,18 @@ namespace BackStageSur
 
                     #endregion
                 }
-                else break;
+                else break;//如果成功，跳出循环
                 
                 
 
             }
             
-            RtT = tRtT;
-            return i;
+            RtT = tRtT;//读取临时变量的值
+            return i;//返回状态
 
         }
 
-        private void pingservice()
-        {
-            throw new NotImplementedException();
-        }
+        
     }
     
 
@@ -318,7 +325,7 @@ namespace BackStageSur
             int Login(string p, string pswd);
             [OperationContract]
             [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
-            DataSet GetServer(string p);
+            DataSet Intialize(string p);
             [OperationContract]
 
             int PingService(int serviceid, ref long RtT);
