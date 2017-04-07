@@ -116,7 +116,7 @@ namespace BackStageSur
                 string s = p;
                 string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.clientid='" + s + "'";
                 string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
-                string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,connstring from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
+                string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
                 Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
                 Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
@@ -231,14 +231,14 @@ namespace BackStageSur
                 if (RtT <= (avgrtt + (3 * stddevrtt)))//如果往返时长正常
                 {
                     #region  向数据库写入成功数据
-                    string MetData = "INSERT INTO sur.tb_data(netboradid,success, rtt, ttl, df, bfl, \"time\" )VALUES(@netboradid, @success, @rtt, @ttl, @df, @bfl, @time); ";
+                    string MetData = "INSERT INTO sur.tb_ntbdata(netboardid,success, rtt, ttl, df, bfl, \"time\" )VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
                     myconnping.Open();
                     try
                     {
 
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -261,15 +261,15 @@ namespace BackStageSur
                 else//如果往返时长过大
                 {
                     #region  向数据库写入报警数据
-                    string ErrData = "INSERT INTO sur.tb_error(netboradid,success, rtt, ttl, df, bfl, \"time\"，handled,clientid )VALUES(@netboradid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid); ";
-                    string MetData = "INSERT INTO sur.tb_data(netboradid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboradid, @success, @rtt, @ttl, @df, @bfl, @time); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\"，handled,clientid )VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid); ";
+                    string MetData = "INSERT INTO sur.tb_ntbdata(netboardid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
                     myconnping.Open();
                     try
                     {
 
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -281,7 +281,7 @@ namespace BackStageSur
                         mycommping.ExecuteNonQuery();
 
                         mycommping.CommandText = MetData;
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -337,8 +337,8 @@ namespace BackStageSur
                 else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
                 {
                     #region  向数据库写入失败数据
-                    string ErrData = "INSERT INTO sur.tb_error(netboradid,success, rtt, ttl, df, bfl, \"time\"，handled,clientid )VALUES(@netboradid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid); ";
-                    string MetData = "INSERT INTO sur.tb_data(netboradid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboradid,@success, @rtt, @ttl, @df, @bfl, @time); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\"，handled,clientid )VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid); ";
+                    string MetData = "INSERT INTO sur.tb_ntbdata(netboardid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboardid,@success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
                     myconnping.Open();
@@ -348,7 +348,7 @@ namespace BackStageSur
                     int BfL = 32;
                     try
                     {
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -360,7 +360,7 @@ namespace BackStageSur
                         mycommping.ExecuteNonQuery();
 
                         mycommping.CommandText = MetData;
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -415,13 +415,12 @@ namespace BackStageSur
                     tcpClient.Close();
                     tcpClient.Dispose();
                     #region  向数据库写入成功数据
-                    string MetData = "INSERT INTO sur.tb_data(netboradid,serviceid,success,\"time\" )VALUES(@netboradid,@serviceid, @success, @time); ";
+                    string MetData = "INSERT INTO sur.tb_svcdata(serviceid,success,\"time\" )VALUES(@serviceid, @success, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
                     myconnping.Open();
                     try
                     {
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svnetboardid;
                         mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
@@ -470,14 +469,14 @@ namespace BackStageSur
                 else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
                 {
                     #region  向数据库写入失败数据
-                    string ErrData = "INSERT INTO sur.tb_error(netboradid,serviceid,success,\"time\"，handled,clientid)VALUES(@netboradid,@serviceid,@success, @time, @handled,@clientid); ";
-                    string MetData = "INSERT INTO sur.tb_data(netboradid,serviceid,success,\"time\")VALUES(@netboradid,@serviceid,@success,@time); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboardid,serviceid,success,\"time\"，handled,clientid)VALUES(@netboardid,@serviceid,@success, @time, @handled,@clientid); ";
+                    string MetData = "INSERT INTO sur.tb_svcdata(serviceid,success,\"time\")VALUES(@serviceid,@success,@time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
                     myconnping.Open();
                     try
                     {
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svnetboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svnetboardid;
                         mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
@@ -485,8 +484,7 @@ namespace BackStageSur
                         mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
                         mycommping.ExecuteNonQuery();
 
-                        mycommping.CommandText = MetData;
-                        mycommping.Parameters.Add("@netboradid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svnetboardid;
+                        mycommping.CommandText = MetData; 
                         mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
