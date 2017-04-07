@@ -114,27 +114,32 @@ namespace BackStageSur
             try
             {
                 string s = p;
-                string sqlstrGtSrvr = "select * from ser.tb_server where cleintid='" + s + "'";
+                string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.clientid='" + s + "'";
                 string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
                 string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,connstring from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "'";
                 Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
                 Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
                 myconnInit.Open();
-                DataTable dtGtSer = new DataTable();
-                DataSet dsInit = new DataSet();
+                DataTable dtGtSer = new DataTable("Server");
+                DataSet dsInit = new DataSet("Intialize");
                 myda.Fill(dtGtSer);
                 mycommGtSer.CommandText = sqlstrGtNetbd;
                 myda.SelectCommand.CommandText = sqlstrGtNetbd;
-                DataTable dtGtNetbd = new DataTable();
+                DataTable dtGtNetbd = new DataTable("Netboard");
                 myda.Fill(dtGtNetbd);
+                DataTable dtGtNetbd2 = new DataTable("Netboard");
+                dtGtNetbd2 = ChangeColumnType(dtGtNetbd);
                 mycommGtSer.CommandText = sqlstrGtSrvis;
                 myda.SelectCommand.CommandText = sqlstrGtSrvis;
-                DataTable dtGtSrvis = new DataTable();
+                DataTable dtGtSrvis = new DataTable("Service");
                 myda.Fill(dtGtSrvis);
                 dsInit.Tables.Add(dtGtSer);
-                dsInit.Tables.Add(dtGtNetbd);
+                dsInit.Tables.Add(dtGtNetbd2);
                 dsInit.Tables.Add(dtGtSrvis);
+                myconnInit.Close();
+                myconnInit.Dispose();
+                mycommGtSer.Dispose();
                 return dsInit;
             }
 
@@ -150,6 +155,39 @@ namespace BackStageSur
                 throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
             }
 
+
+        }
+        public DataTable ChangeColumnType(DataTable dt)
+        {
+
+            DataTable tempdt = new DataTable();
+            for (int i = 0; i < 3; i++)
+            {
+                if (i != 2)
+                {
+                    DataColumn tempdc = new DataColumn();
+                    tempdc.ColumnName = dt.Columns[i].ColumnName;
+                    tempdc.DataType = dt.Columns[i].DataType;
+                    tempdt.Columns.Add(tempdc);
+                }
+                else
+                {
+                    DataColumn tempdc = new DataColumn();
+                    tempdc.ColumnName = dt.Columns[i].ColumnName;
+                    tempdc.DataType = typeof(String);
+                    tempdt.Columns.Add(tempdc);
+                }
+
+            }
+
+            DataRow newrow;
+            foreach (DataRow dr in dt.Rows)
+            {
+                newrow = tempdt.NewRow();
+                newrow.ItemArray = dr.ItemArray;
+                tempdt.Rows.Add(newrow);
+            }
+            return tempdt;
 
         }
         public delegate int ScndPing(int netboardid, ref long RtT, string p);//定义委托
