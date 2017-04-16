@@ -71,17 +71,11 @@ namespace BackStageSur
         {
             try
             {
-                string sqlstrlgn = "select passwd from ser.tb_login where cleintid='" + p + "'";//选择clientid相对应的MD5
+                string sqlstrlgn = "select passwd from sur.tb_login where clientid='" + p + "'";//选择clientid相对应的MD5
                 Npgsql.NpgsqlConnection myconnlgn = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommlgn = new Npgsql.NpgsqlCommand(sqlstrlgn, myconnlgn);
-
-                //Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstr, myconn);
+                Npgsql.NpgsqlCommand mycommlgn = new Npgsql.NpgsqlCommand(sqlstrlgn, myconnlgn);              
                 myconnlgn.Open();
-                //DataTable dt = new DataTable();
-                //DataSet ds = new DataSet();
-                //myda.Fill(dt);
-                //ds.Tables.Add(dt);
-                string comp = mycommlgn.ExecuteScalar().ToString();  // TODO:test  //MD5赋值给临时变量
+                string comp = mycommlgn.ExecuteScalar().ToString().Trim();    //MD5赋值给临时变量
                 myconnlgn.Close();
                 myconnlgn.Dispose();
                 if (comp == "" || comp == null)//判断是否有对应MD5
@@ -191,12 +185,12 @@ namespace BackStageSur
 
         }
         public delegate int ScndPing(int netboardid, ref long RtT, string p);//定义委托
-        ScndPing SPing;//声明委托
-        int netboardid = 0;
+        ScndPing SPing;//声明委托        
+        int ntserverid = 0;
         public int ping(int netboardid, ref long RtT, string p)
         {
             #region 从数据库中读取数据
-            string dat = "select url,avgrtt,stddevrtt from tb_netboard where tb_netboard.netboardid=" + netboardid + "";
+            string dat = "select url,avgrtt,stddevrtt,serverid from tb_netboard where tb_netboard.netboardid=" + netboardid + "";
             Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
             Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
             Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
@@ -205,6 +199,7 @@ namespace BackStageSur
             string url = dt.Rows[0][0].ToString().Trim();
             double avgrtt = Convert.ToDouble(dt.Rows[0][1]);
             double stddevrtt = Convert.ToDouble(dt.Rows[0][2]);
+            ntserverid = Convert.ToInt16(dt.Rows[0][3]);
             #endregion
 
             Ping pingSender = new Ping();
@@ -238,7 +233,7 @@ namespace BackStageSur
                     try
                     {
 
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -261,7 +256,7 @@ namespace BackStageSur
                 else//如果往返时长过大
                 {
                     #region  向数据库写入报警数据
-                    string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\"，handled,clientid )VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\",handled,clientid,serverid)VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid,@serverid); ";
                     string MetData = "INSERT INTO sur.tb_ntbdata(netboardid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
@@ -269,7 +264,7 @@ namespace BackStageSur
                     try
                     {
 
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -278,10 +273,11 @@ namespace BackStageSur
                         mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                         mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
+                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = ntserverid;
                         mycommping.ExecuteNonQuery();
 
                         mycommping.CommandText = MetData;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -337,7 +333,7 @@ namespace BackStageSur
                 else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
                 {
                     #region  向数据库写入失败数据
-                    string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\"，handled,clientid )VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\",handled,clientid,serverid)VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid,@serverid); ";
                     string MetData = "INSERT INTO sur.tb_ntbdata(netboardid,success, rtt, ttl, df, bfl, \"time\")VALUES(@netboardid,@success, @rtt, @ttl, @df, @bfl, @time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
@@ -348,7 +344,7 @@ namespace BackStageSur
                     int BfL = 32;
                     try
                     {
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -357,10 +353,11 @@ namespace BackStageSur
                         mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                         mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
+                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = ntserverid;
                         mycommping.ExecuteNonQuery();
 
                         mycommping.CommandText = MetData;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = this.netboardid;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
                         mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
                         mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
@@ -392,10 +389,11 @@ namespace BackStageSur
         public delegate int ScndTest(int serviceid, string p);//定义委托
         ScndTest STest;//声明委托
         int svnetboardid;
+        int svserverid;
         public int Service(int serviceid, string p)
         {
             #region 从数据库中读取数据
-            string dat = "select tb_service.netboardid,tb_netboard.url,tb_service.port from tb_netboard inner join tb_service on tb_netboard.netboardid=tb_service.netboardid where tb_service.serviceid=" + serviceid + "";
+            string dat = "select tb_service.netboardid,tb_netboard.url,tb_service.port,tb_netboard.serverid from tb_netboard inner join tb_service on tb_netboard.netboardid=tb_service.netboardid where tb_service.serviceid=" + serviceid + "";
             Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
             Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
             Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
@@ -404,6 +402,7 @@ namespace BackStageSur
             svnetboardid = Convert.ToInt16(dt.Rows[0][0]);
             string url = dt.Rows[0][1].ToString().Trim();
             Int32 port = Convert.ToInt32(dt.Rows[0][2].ToString().Trim());
+            svserverid= Convert.ToInt16(dt.Rows[0][3]);
             #endregion
             #region 测试连接
             TcpClient tcpClient = new TcpClient();//实例化TCPClient
@@ -469,7 +468,7 @@ namespace BackStageSur
                 else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
                 {
                     #region  向数据库写入失败数据
-                    string ErrData = "INSERT INTO sur.tb_error(netboardid,serviceid,success,\"time\"，handled,clientid)VALUES(@netboardid,@serviceid,@success, @time, @handled,@clientid); ";
+                    string ErrData = "INSERT INTO sur.tb_error(netboardid,serviceid,success,\"time\",handled,clientid,serverid)VALUES(@netboardid,@serviceid,@success, @time, @handled,@clientid,@serverid); ";
                     string MetData = "INSERT INTO sur.tb_svcdata(serviceid,success,\"time\")VALUES(@serviceid,@success,@time); ";
                     Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                     Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
@@ -482,6 +481,7 @@ namespace BackStageSur
                         mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                         mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                         mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
+                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svserverid;
                         mycommping.ExecuteNonQuery();
 
                         mycommping.CommandText = MetData; 
@@ -580,6 +580,209 @@ namespace BackStageSur
             #endregion
         }
 
+        public DataSet SvrDetl(int serverid, string p)
+        {
+            try
+            {
+                string s = p;
+                string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
+                string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
+                string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
+                Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
+                myconnInit.Open();
+                DataTable dtGtSer = new DataTable("Server");
+                DataSet dsInit = new DataSet("Intialize");
+                myda.Fill(dtGtSer);
+                mycommGtSer.CommandText = sqlstrGtNetbd;
+                myda.SelectCommand.CommandText = sqlstrGtNetbd;
+                DataTable dtGtNetbd = new DataTable("Netboard");
+                myda.Fill(dtGtNetbd);
+                DataTable dtGtNetbd2 = new DataTable("Netboard");
+                dtGtNetbd2 = ChangeColumnType(dtGtNetbd);
+                mycommGtSer.CommandText = sqlstrGtSrvis;
+                myda.SelectCommand.CommandText = sqlstrGtSrvis;
+                DataTable dtGtSrvis = new DataTable("Service");
+
+                myda.Fill(dtGtSrvis);
+
+
+                dsInit.Tables.Add(dtGtSer);
+                dsInit.Tables.Add(dtGtNetbd2);
+                dsInit.Tables.Add(dtGtSrvis);
+                myconnInit.Close();
+                myconnInit.Dispose();
+                mycommGtSer.Dispose();
+                return dsInit;
+            }
+
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+            {
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+            }
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+        }
+
+        public DataSet ClientDetail(string p)
+        {
+            try
+            {
+                string s = p;
+                string sqlstrGtCD = "select * from sur.tb_client where tb_client.clientid='" + s + "'";
+                Npgsql.NpgsqlConnection myconnGtCD = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtCD, myconnGtCD);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtCD, myconnGtCD);
+                myconnGtCD.Open();
+                DataTable dtGtCD = new DataTable("员工");
+                DataSet dsGtCD = new DataSet("ClientDetail");
+                myda.Fill(dtGtCD);
+                dsGtCD.Tables.Add(dtGtCD);
+                myconnGtCD.Close();
+                myconnGtCD.Dispose();
+                mycommGtSer.Dispose();
+                return dsGtCD;
+            }
+
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+            {
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+            }
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+        }
+
+        public DataSet SelSrvErr(int serverid, string p)
+        {
+            try
+            {
+                string s = p;
+                string sqlstrSLER = "select * from sur.tb_error where tb_error.serverid=" + serverid + " and tb_error.clientid='" + p + "'";
+                string sqlstrSLER1 = "select * from sur.tb_error where tb_error.serverid=" + serverid + " and tb_error.clientid='" + p + "' and handled=false";
+                Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER, myconnSLER);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER, myconnSLER);
+                myconnSLER.Open();
+                DataTable dtSLER = new DataTable("所有错误");
+                DataTable dtSLER1 = new DataTable("未处理错误");
+                DataSet dsSLER = new DataSet("Errors");
+                myda.Fill(dtSLER);
+
+                dsSLER.Tables.Add(dtSLER);
+                mycommGtSer.CommandText = sqlstrSLER1;
+                myda.SelectCommand.CommandText = sqlstrSLER1;
+                myda.Fill(dtSLER1);
+                dsSLER.Tables.Add(dtSLER1);
+                myconnSLER.Close();
+                myconnSLER.Dispose();
+                mycommGtSer.Dispose();
+                return dsSLER;
+            }
+
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+            {
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+            }
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+        }
+
+        public DataSet SelUhdErr(string p)
+        {
+            try
+            {
+                string s = p;
+
+                string sqlstrSLER1 = "select * from sur.tb_error where tb_error.clientid='" + p + "' and handled=false";
+                Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER1, myconnSLER);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER1, myconnSLER);
+                myconnSLER.Open();
+
+                DataTable dtSLER1 = new DataTable("未处理错误");
+                DataSet dsSLER = new DataSet("Errors");
+
+
+                mycommGtSer.CommandText = sqlstrSLER1;
+                myda.SelectCommand.CommandText = sqlstrSLER1;
+                myda.Fill(dtSLER1);
+                dsSLER.Tables.Add(dtSLER1);
+                myconnSLER.Close();
+                myconnSLER.Dispose();
+                mycommGtSer.Dispose();
+                return dsSLER;
+            }
+
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+            {
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+            }
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+        }
+
+        public DataSet SelNtbRctErr(int netboardid, int count, string p)
+        {
+            try
+            {
+                string s = p;
+                int ntbid = netboardid;
+                int ct = count;
+                string sqlstrSNRE = "select * from tb_error where tb_error.netboardid=" + ntbid + " and tb_error.clientid='" + s + "' and tb_error.serviceid is null order by time desc limit " + ct + "";
+                Npgsql.NpgsqlConnection myconnSNRE = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSNRE, myconnSNRE);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNRE, myconnSNRE);
+                myconnSNRE.Open();
+
+                DataTable dtSNRE = new DataTable("网卡最近错误");
+                DataSet dsSNRE = new DataSet("NtbRctErrors");
+
+
+                mycommGtSer.CommandText = sqlstrSNRE;
+                myda.SelectCommand.CommandText = sqlstrSNRE;
+                myda.Fill(dtSNRE);
+                dsSNRE.Tables.Add(dtSNRE);
+                myconnSNRE.Close();
+                myconnSNRE.Dispose();
+                mycommGtSer.Dispose();
+                return dsSNRE;
+            }
+
+            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+            {
+                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+            }
+            catch (TimeoutException te)//如果数据库未在侦听
+            {
+                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+            }
+        }
+
+
     }
 
     [ServiceContract(Namespace = "Horace")]
@@ -605,6 +808,21 @@ namespace BackStageSur
         [OperationContract]
         [FaultContract(typeof(WCFError))]
         int ErrSvc(int serviceid);
+        [OperationContract]
+        [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
+        DataSet SvrDetl(int serverid, string p);
+        [OperationContract]
+        [FaultContract(typeof(WCFError))]
+        DataSet ClientDetail(string p);
+        [OperationContract]
+        [FaultContract(typeof(WCFError))]
+        DataSet SelSrvErr(int serverid, string p);
+        [OperationContract]
+        [FaultContract(typeof(WCFError))]
+        DataSet SelUhdErr(string p);
+        [OperationContract]
+        [FaultContract(typeof(WCFError))]
+        DataSet SelNtbRctErr(int netboardid, int count, string p);
     }
 
 
