@@ -1,5 +1,38 @@
 # BackStageSur
 服务器监控程序WCF客户端（Ping分支）
+## 4.20: 
+### 新增选择服务器紧急联系人的方法 
+`public DataSet SelEmerEmp(string clientid)` 
+新增服务器之前选择服务器的紧急联系人（读取数据库中所有员工信息）的方法 
+### 新增添加服务器方法 
+`public int InsSvr(string clientid,string servername,int commyear,string empolyid)` 
+新增一个服务器 
+### 新增添加雇员方法 
+`public int InsEmp(string name,int age,string sex,string tel,string email,string clientid)` 
+新增一个雇员 
+### 新增读取网卡最近的指定条数据方法 
+`public DataSet SelNtbRctData(int netboardid, int count, string p)` 
+读取网卡最近的指定条数据(count 关键字为条数) 
+## 4.19: 
+### 为所有方法添加了说明 
+为所有方法添加了说明，现在在调用服务引用下的方法时，可以直接在IDE中查看方法的具体作用。 
+## 4.17: 
+### 新增UDP客户端 
+新增了在本地回路上收发消息的UDP客户端，可以实现后台调用反映在程序界面上。优化了大负荷下的显示效果。修复了显示界面字符串可能溢出的问题。 
+## 4.16: 
+### Debug了Login方法 
+修复了Login方法因为字段名称不正确和数据长度的不正确引发的不能返回登录成功的问题。 
+### 新增了选择服务器已处理和未处理错误的方法  
+ `public DataSet SelSrvErr(int serverid, string p)` 
+用于选择某服务器的所有错误和未处理错误  
+  `public DataSet SelUhdErr( string p)` 
+用于选择某服务器的所有未处理错误  
+### 新增了选择网卡近10条错误的方法 
+`public DataSet SelNtbRctErr(int netboardid,int count,string p)`
+用于选择某个用户的某个网卡的最近的指定条数据(count 关键字为条数)
+## 4.8: 
+### 方法根据数据库的结构进行了更改 
+现在数据表已经拆分成ntbdata和svcdata了，不再共同存放，但是tb_error仍存放所有网卡和服务的错误数据。
 ## 4.7:
 ### PingNetbd方法更新  
 原先的Ping方法（基于ICMP）的PingService已经改名成PingNetbd,
