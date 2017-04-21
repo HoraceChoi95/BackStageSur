@@ -1056,8 +1056,127 @@ namespace BackStageSur
                     throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
                 }
             }
+            /// <summary>
+            /// 读取数据库中已有的操作记录类型(可以放在Combobox中)
+            /// </summary>
+            public DataSet SelActTyp(string p)
+            {
+                try
+                {
+                    string s = p;
+                    string sqlstrSAT = "select distinct activitytype from tb_activity where tb_activity.clientid='"+s+"'";
+                    Npgsql.NpgsqlConnection myconnSAT = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommSNRD = new Npgsql.NpgsqlCommand(sqlstrSAT, myconnSAT);
+                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSAT, myconnSAT);
+                    myconnSAT.Open();
+
+                    DataTable dtSAT = new DataTable("操作类型");
+                    DataSet dsSAT = new DataSet("ActTyp");
 
 
+                    mycommSNRD.CommandText = sqlstrSAT;
+                    myda.SelectCommand.CommandText = sqlstrSAT;
+                    myda.Fill(dtSAT);
+                    dsSAT.Tables.Add(dtSAT);
+                    myconnSAT.Close();
+                    myconnSAT.Dispose();
+                    mycommSNRD.Dispose();
+                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询操作类型，成功"), point);
+                    return dsSAT;
+                }
+
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                }
+                catch (TimeoutException te)//如果数据库未在侦听
+                {
+                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                }
+            }
+            /// <summary>
+            /// 新增一条新的操作记录(类型可以是新添加的)
+            /// </summary>
+            public int InsAct(string clientid, string activitytype,DateTime starttime,DateTime endtime)
+            {
+                string cid = clientid;
+                string atype = activitytype;
+                DateTime stime = starttime;
+                DateTime etime = endtime;
+                string InsEmp = "INSERT INTO sur.tb_activity(clientid,activitytype,starttime,endtime)VALUES(@clientid,@activitytype,@starttime,@endtime); ";
+                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsEmp, myconnping);
+                myconnping.Open();
+                try
+                {
+                    mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = cid;
+                    mycommping.Parameters.Add("@activitytype", NpgsqlTypes.NpgsqlDbType.Char, 30).Value = activitytype;
+                    mycommping.Parameters.Add("@starttime", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = stime;
+                    mycommping.Parameters.Add("@endtime", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = endtime;
+                    
+                    mycommping.ExecuteNonQuery();
+                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + atype + "类型操作数据，成功"), point);
+                    myconnping.Close();
+                    return 0;
+                }
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    myconnping.Close();
+                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + atype + "类型操作数据，数据库写入失败"), point);
+                    var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                }
+            }
+            /// <summary>
+            /// 在服务器上新增一块网卡(如果serverid不属于该client，会返回1)
+            /// </summary>
+            //DONE：确认Server属性中clientid和参数值相等
+            public int InsNtbd(int serverid, string url,string clientid)
+            {
+                string cid = clientid;
+                int sid=serverid;
+                string ip = url;
+                #region 从数据库中读取数据
+                string dat = "select clientid from tb_server where tb_server.serverid=" + sid + "";
+                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                DataTable dt = new DataTable();
+                myda.Fill(dt);
+                string cidverify = dt.Rows[0][0].ToString().Trim();
+
+                #endregion
+                if (cidverify == cid.Trim())
+                {
+                    IPAddress Adress = IPAddress.Parse(url.Trim());
+                    string InsNtbd = "INSERT INTO sur.tb_netboard(serverid,url)VALUES(@serverid,@url); ";
+                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
+                    myconnping.Open();
+                    try
+                    {
+                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = sid;
+                        mycommping.Parameters.Add("@url", NpgsqlTypes.NpgsqlDbType.Inet).Value = Adress;
+
+
+                        mycommping.ExecuteNonQuery();
+                        server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);
+                        myconnping.Close();
+                        return 0;
+                    }
+                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                    {
+                        myconnping.Close();
+                        server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
+                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                    }
+                }
+                else return 1;
+            }
 
         }
 
@@ -1111,6 +1230,15 @@ namespace BackStageSur
             [OperationContract]
             [FaultContract(typeof(WCFError))]
             DataSet SelNtbRctData(int netboardid, int count, string p);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            DataSet SelActTyp(string p);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int InsAct(string clientid, string activitytype, DateTime starttime, DateTime endtime);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int InsNtbd(int serverid, string url, string clientid);
         }
 
 
