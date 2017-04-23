@@ -1177,6 +1177,57 @@ namespace BackStageSur
                 }
                 else return 1;
             }
+            /// <summary>
+            /// 在网卡上新增一个服务(如果serverid不属于该client或网卡不属于该服务器，会返回1)
+            /// </summary>
+
+            public int InsSvc(int serverid, string servicetype,string servicename,int netboardid,int port,string clientid)
+            {
+                int srvid = serverid;
+                string srvtype = servicetype;
+                string srvname = servicename;
+                int nid = netboardid;
+                int pt = port;
+                string s = clientid;
+                #region 从数据库中读取数据
+                string dat = "select tb_server.serverid,clientid from tb_server inner join tb_netboard on tb_server.serverid=tb_netboard.serverid where tb_netboard.netboardid=" + netboardid + "";
+                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                DataTable dt = new DataTable();
+                myda.Fill(dt);
+                int sidverify = Convert.ToInt16(dt.Rows[0][0]);
+                string cidverify=dt.Rows[0][1].ToString().Trim();
+                #endregion
+                if (cidverify == s.Trim()&&sidverify==srvid)
+                {
+                    
+                    string InsNtbd = "INSERT INTO sur.tb_service(serverid,servicetype,servicename,netboardid,port)VALUES(@serverid,@servicetype,@servicename,@netboardid,@port); ";
+                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
+                    myconnping.Open();
+                    try
+                    {
+                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = srvid;
+                        mycommping.Parameters.Add("@servicetype", NpgsqlTypes.NpgsqlDbType.Char,15).Value = srvtype;
+                        mycommping.Parameters.Add("@servicename", NpgsqlTypes.NpgsqlDbType.Char,20).Value = srvname;
+                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Integer).Value = nid;
+                        mycommping.Parameters.Add("@port", NpgsqlTypes.NpgsqlDbType.Integer).Value = pt;
+                        mycommping.ExecuteNonQuery();
+                        server.SendTo(Encoding.UTF8.GetBytes("" + s + "用户在" + srvid + "号服务器"+nid+"号网卡上新增服务，成功"), point);
+                        myconnping.Close();
+                        return 0;
+                    }
+                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                    {
+                        myconnping.Close();
+                        server.SendTo(Encoding.UTF8.GetBytes("" + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
+                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                    }
+                }
+                else return 1;
+            }
 
         }
 
@@ -1239,6 +1290,9 @@ namespace BackStageSur
             [OperationContract]
             [FaultContract(typeof(WCFError))]
             int InsNtbd(int serverid, string url, string clientid);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int InsSvc(int serverid, string servicetype, string servicename, int netboardid, int port, string clientid);
         }
 
 
