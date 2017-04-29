@@ -29,7 +29,8 @@ namespace BackStageSur
         static Socket server;
         private ServiceHost host;
         bool read = true;
-        private void button1_Click(object sender, EventArgs e)
+        
+        public void button1_Click(object sender, EventArgs e)
         {
 
             Uri baseAddress = new Uri("http://127.0.0.1:9999/");
@@ -46,22 +47,25 @@ namespace BackStageSur
             server = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             server.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 4770));//绑定端口号和IP
             Thread t = new Thread(ReciveMsg);//开启接收消息线程
+            t.IsBackground = true;
             t.Start();
 
         }
 
-        private void button2_Click(object sender, EventArgs e)
+        public void button2_Click(object sender, EventArgs e)
         {
 
             host.Closed += delegate { MessageBox.Show("服务已经停止！"); };
             this.host.Close();
+            
             this.bt_Stop.Enabled = false;
             this.bt_Ini.Enabled = true;
             read = false;
+            
 
         }
 
-        private void ReciveMsg()
+        public void ReciveMsg()
         {
             while (read)
             {
@@ -1229,6 +1233,80 @@ namespace BackStageSur
                 else return 1;
             }
 
+            /// <summary>
+            /// 读取网卡最近一段时间内的数据(starttime是相对较小日期时间)
+            /// </summary>
+            public DataSet SelNtbBwnData(int netboardid, string p, DateTime starttime, DateTime endtime)
+            {
+                try
+                {
+                    string s = p;
+                    int ntbid = netboardid;
+                    string stime = starttime.ToString();
+                    string  etime = endtime.ToString();
+                    string sqlstrSNBD = "select * from tb_ntbdata where tb_ntbdata.netboardid="+netboardid+" and time >= '"+stime+ "'::timestamp and time <= '" + etime + " order by time desc";
+                    Npgsql.NpgsqlConnection myconnSNBD = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommSNBD = new Npgsql.NpgsqlCommand(sqlstrSNBD, myconnSNBD);
+                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNBD, myconnSNBD);
+                    myconnSNBD.Open();
+
+                    DataTable dtSNBD = new DataTable("网卡时间段数据");
+                    DataSet dsSNBD = new DataSet("NtbBwnData");
+
+
+                    mycommSNBD.CommandText = sqlstrSNBD;
+                    myda.SelectCommand.CommandText = sqlstrSNBD;
+                    myda.Fill(dtSNBD);
+                    dsSNBD.Tables.Add(dtSNBD);
+                    myconnSNBD.Close();
+                    myconnSNBD.Dispose();
+                    mycommSNBD.Dispose();
+                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询" + netboardid + "号网卡最近从"+stime+ "到" + etime + "时间段数据详细信息，成功"), point);
+                    return dsSNBD;
+                }
+
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                }
+                catch (TimeoutException te)//如果数据库未在侦听
+                {
+                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                }
+            }
+            /// <summary>
+            /// 处理错误
+            /// </summary>
+            public int HandleError(int errorid,string p)
+            {
+                int eid = errorid;
+                string clientid = p;
+                string HE = "UPDATE tb_error SET  handled=true WHERE errorid=" + eid + " and clientid='" + clientid + "'";
+                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(HE, myconnping);
+                myconnping.Open();
+                try
+                {
+                    mycommping.ExecuteNonQuery();
+                    
+                    
+                        server.SendTo(Encoding.UTF8.GetBytes("" +clientid + "用户处理"+eid+"号错误，成功"), point);
+                        myconnping.Close();
+                        return 0;
+                    
+                    
+                }
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    myconnping.Close();
+                    server.SendTo(Encoding.UTF8.GetBytes("" + clientid + "用户处理" + eid + "号错误，数据库写入失败"), point);
+                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                }
+            }
         }
 
         [ServiceContract(Namespace = "Horace")]
@@ -1293,10 +1371,18 @@ namespace BackStageSur
             [OperationContract]
             [FaultContract(typeof(WCFError))]
             int InsSvc(int serverid, string servicetype, string servicename, int netboardid, int port, string clientid);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            DataSet SelNtbBwnData(int netboardid, string p, DateTime starttime, DateTime endtime);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int HandleError(int errorid, string p);
         }
 
+        private void FrmMain_FormClosing(object sender, FormClosingEventArgs e)
+        {
 
-
+        }
     }
     namespace HoraceOriginal
     {
