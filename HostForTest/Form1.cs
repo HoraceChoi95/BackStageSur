@@ -147,17 +147,17 @@ namespace BackStageSur
                     myconnlgn.Dispose();
                     if (comp == "" || comp == null)//判断是否有对应MD5
                     {
-                        server.SendTo(Encoding.UTF8.GetBytes("" + p + "试图登录，用户名密码不存在"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff")+ "    " + p + "试图登录，用户名密码不存在"), point);
                         return 2;
                     }
                     else if (comp == pswd)//判断相等
                     {
-                        server.SendTo(Encoding.UTF8.GetBytes("" + p + "登陆成功"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "登陆成功"), point);
                         return 0;
                     }
                     else
                     {
-                        server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户密码校验失败"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户密码校验失败"), point);
                         return 1;
                     }
 
@@ -210,7 +210,7 @@ namespace BackStageSur
                     myconnInit.Close();
                     myconnInit.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户初始化数据返回成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户初始化数据返回成功"), point);
                     return dsInit;
                 }
 
@@ -326,7 +326,7 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
                             mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                             mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户监测" + netboardid + "网卡，数据正常"), point);
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，数据正常"), point);
                         }
                         catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                         {
@@ -371,7 +371,7 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
                             mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                             mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户监测" + netboardid + "网卡，往返时长过大"), point);
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，往返时长过大"), point);
                         }
                         catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                         {
@@ -390,10 +390,7 @@ namespace BackStageSur
                     return 1;
                 }
 
-                //if (servicetype == "数据库服务器")
-                //{
 
-                //}
             }
             int i = 1;
             long tRtT = 0;
@@ -454,7 +451,7 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
                             mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                             mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户监测" + netboardid + "网卡，Ping失败"), point);
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，Ping失败"), point);
                         }
                         catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                         {
@@ -518,7 +515,7 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
                             mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                             mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户监测" + serviceid + "服务，成功"), point);
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + serviceid + "服务，成功"), point);
                         }
                         catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                         {
@@ -587,7 +584,7 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
                             mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                             mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户监测" + serviceid + "服务，失败"), point);
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + serviceid + "服务，失败"), point);
                         }
                         catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                         {
@@ -721,7 +718,7 @@ namespace BackStageSur
                     myconnInit.Close();
                     myconnInit.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询" + serverid + "服务器详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器详细信息，成功"), point);
                     return dsInit;
                 }
 
@@ -758,7 +755,7 @@ namespace BackStageSur
                     myconnGtCD.Close();
                     myconnGtCD.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询员工详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询员工详细信息，成功"), point);
                     return dsGtCD;
                 }
 
@@ -802,7 +799,7 @@ namespace BackStageSur
                     myconnSLER.Close();
                     myconnSLER.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询" + serverid + "服务器错误详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器错误详细信息，成功"), point);
                     return dsSLER;
                 }
 
@@ -845,7 +842,7 @@ namespace BackStageSur
                     myconnSLER.Close();
                     myconnSLER.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询未处理错误详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询未处理错误详细信息，成功"), point);
                     return dsSLER;
                 }
 
@@ -889,7 +886,7 @@ namespace BackStageSur
                     myconnSNRE.Close();
                     myconnSNRE.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询" + netboardid + "号网卡未处理最近" + count + "条错误详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡未处理最近" + count + "条错误详细信息，成功"), point);
                     return dsSNRE;
                 }
 
@@ -931,7 +928,7 @@ namespace BackStageSur
                     myconnSEE.Close();
                     myconnSEE.Dispose();
                     mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + s + "用户选择员工中紧急联系人信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户选择员工中紧急联系人信息，成功"), point);
                     return dsSEE;
                 }
 
@@ -950,31 +947,33 @@ namespace BackStageSur
             /// <summary>
             /// 新增一个服务器
             /// </summary>
-            public int InsSvr(string clientid,string servername,int commyear,string empolyid)
+            public int InsSvr(string clientid,string servername,DateTime commyear,string empolyid)// TODO:返回服务器号
             {
                 string cid = clientid;
                 string svrname = servername;
-                int cyear = commyear;
+                string cyear = commyear.ToString("yyyy-MM-dd");
                 string eid = empolyid;
-                string InsSvr = "INSERT INTO sur.tb_server(clientid,name,commissionyear,emergency)VALUES(@clientid,@name,@commissionyear,@emergency); ";
+                string InsSvr = "INSERT INTO sur.tb_server(clientid,name,commissionyear,emergency)VALUES(@clientid,@name,@commissionyear,@emergency) SELECT @@IDENTITY AS serverid; ";
                 Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsSvr, myconnping);
+                
                 myconnping.Open();
                 try
                 {
                     mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char,10).Value = cid;
                     mycommping.Parameters.Add("@name", NpgsqlTypes.NpgsqlDbType.Char, 40).Value =svrname;
-                    mycommping.Parameters.Add("@commissionyear", NpgsqlTypes.NpgsqlDbType.Bigint).Value =cyear;
+                    mycommping.Parameters.Add("@commissionyear", NpgsqlTypes.NpgsqlDbType.Date).Value =cyear;
                     mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + cid+ "用户新增" + svrname + "服务器，成功"), point);
+                    Npgsql.NpgsqlDataReader R = mycommping.ExecuteReader();
+                    int i = Convert.ToInt16(R.GetValue(0));
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid+ "用户新增" + svrname + "服务器，成功"), point);
                     myconnping.Close();
-                    return 0;
+                    return i;
                 }
                 catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                 {
                     myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + svrname + "服务器，数据库写入失败"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，数据库写入失败"), point);
                     var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                     throw new FaultException<WCFError>(error, error.Message);//抛出错误
                 }
@@ -1003,14 +1002,14 @@ namespace BackStageSur
                     mycommping.Parameters.Add("@email", NpgsqlTypes.NpgsqlDbType.Char, 20).Value = at;
                     mycommping.Parameters.Add("@sex", NpgsqlTypes.NpgsqlDbType.Char, 5).Value = gender;
                     mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + nme+ "雇员，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + nme+ "雇员，成功"), point);
                     myconnping.Close();
                     return 0;
                 }
                 catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                 {
                     myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + nme + "雇员，数据库写入失败"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + nme + "雇员，数据库写入失败"), point);
                     var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                     throw new FaultException<WCFError>(error, error.Message);//抛出错误
                 }
@@ -1044,7 +1043,7 @@ namespace BackStageSur
                     myconnSNRD.Close();
                     myconnSNRD.Dispose();
                     mycommSNRD.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，成功"), point);
                     return dsSNRD;
                 }
 
@@ -1085,7 +1084,7 @@ namespace BackStageSur
                     myconnSAT.Close();
                     myconnSAT.Dispose();
                     mycommSNRD.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询操作类型，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询操作类型，成功"), point);
                     return dsSAT;
                 }
 
@@ -1122,14 +1121,14 @@ namespace BackStageSur
                     mycommping.Parameters.Add("@endtime", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = endtime;
                     
                     mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + atype + "类型操作数据，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + atype + "类型操作数据，成功"), point);
                     myconnping.Close();
                     return 0;
                 }
                 catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                 {
                     myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户新增" + atype + "类型操作数据，数据库写入失败"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + atype + "类型操作数据，数据库写入失败"), point);
                     var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                     throw new FaultException<WCFError>(error, error.Message);//抛出错误
                 }
@@ -1167,14 +1166,14 @@ namespace BackStageSur
 
 
                         mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);
                         myconnping.Close();
                         return 0;
                     }
                     catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                     {
                         myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes("" + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
                         var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                         throw new FaultException<WCFError>(error, error.Message);//抛出错误
                     }
@@ -1218,14 +1217,14 @@ namespace BackStageSur
                         mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Integer).Value = nid;
                         mycommping.Parameters.Add("@port", NpgsqlTypes.NpgsqlDbType.Integer).Value = pt;
                         mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes("" + s + "用户在" + srvid + "号服务器"+nid+"号网卡上新增服务，成功"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器"+nid+"号网卡上新增服务，成功"), point);
                         myconnping.Close();
                         return 0;
                     }
                     catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                     {
                         myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes("" + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
                         var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                         throw new FaultException<WCFError>(error, error.Message);//抛出错误
                     }
@@ -1261,7 +1260,7 @@ namespace BackStageSur
                     myconnSNBD.Close();
                     myconnSNBD.Dispose();
                     mycommSNBD.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + p + "用户查询" + netboardid + "号网卡最近从"+stime+ "到" + etime + "时间段数据详细信息，成功"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从"+stime+ "到" + etime + "时间段数据详细信息，成功"), point);
                     return dsSNBD;
                 }
 
@@ -1293,7 +1292,7 @@ namespace BackStageSur
                     mycommping.ExecuteNonQuery();
                     
                     
-                        server.SendTo(Encoding.UTF8.GetBytes("" +clientid + "用户处理"+eid+"号错误，成功"), point);
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户处理"+eid+"号错误，成功"), point);
                         myconnping.Close();
                         return 0;
                     
@@ -1302,7 +1301,130 @@ namespace BackStageSur
                 catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                 {
                     myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes("" + clientid + "用户处理" + eid + "号错误，数据库写入失败"), point);
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户处理" + eid + "号错误，数据库写入失败"), point);
+                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                }
+            }
+            /// <summary>
+            /// 用于测试网卡IP地址的正确与否，不写入数据。正常返回0，失败返回1。
+            /// </summary>
+            public int PingIP(string address, ref long RtT, string clientid)
+            {
+                string url = address;
+                string p = clientid;
+                Ping pingSender = new Ping();
+                PingOptions options = new PingOptions();
+                // 使用默认TTL值128,
+                // but change the fragmentation behavior.
+                options.DontFragment = true;
+                // Create a buffer of 32 bytes of data to be transmitted.
+                string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+                byte[] buffer = Encoding.ASCII.GetBytes(data);
+                int timeout = 120;
+                IPAddress Address = IPAddress.Parse(url);
+                PingReply reply = pingSender.Send(Address, timeout, buffer, options);
+                if (reply.Status == IPStatus.Success)
+                {
+
+                    RtT = reply.RoundtripTime;
+                    return 0;
+                    
+                    
+                }
+                else
+                {
+                    RtT = 12000;
+                    return 1;
+                }
+            } 
+            /// <summary>
+              /// 更新服务器信息
+              /// </summary>
+            public int UpdSvr(int serverid,string clientid, string servername, DateTime commyear, string empolyid)
+            {
+                int sid = serverid;
+                string cid = clientid;
+                string svrname = servername;
+                string cyear = commyear.ToString("yyyy-MM-dd");
+                string eid = empolyid;
+                string UpdSvr = "UPDATE sur.tb_server SET name="+svrname+", emergency="+eid+", commissionyear="+cyear+ " WHERE serverid="+sid+"; ";
+                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvr, myconnping);
+                myconnping.Open();
+                try
+                {
+                    
+                    mycommping.ExecuteNonQuery();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + svrname + "服务器信息，成功"), point);
+                    myconnping.Close();
+                    return 0;
+                }
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    myconnping.Close();
+                    
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + svrname + "服务器信息，数据库写入失败"), point);
+                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                    return 1;
+                }
+            }
+            /// <summary>
+            /// 更新网卡信息
+            /// </summary>
+            public int UpdNtbd(int netboardid, string url, string clientid)
+            {
+                string cid = clientid;
+                int nid = netboardid;
+                IPAddress Adress = IPAddress.Parse(url.Trim());
+                string UpdNtbd = "UPDATE SET url="+Adress+ " WHERE netboardid="+nid+"; ";
+                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdNtbd, myconnping);
+                myconnping.Open();
+                try
+                {
+                    mycommping.ExecuteNonQuery();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新"+nid+"号网卡信息，成功"), point);
+                    myconnping.Close();
+                    return 0;
+                }
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    myconnping.Close();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + nid + "号网卡信息，数据库写入失败"), point);
+                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                }
+            }
+            /// <summary>
+            /// 更新服务信息
+            /// </summary>
+            public int UpdSvc(int serviceid,int serverid, string servicetype, string servicename, int netboardid, int port, string clientid)
+            {
+                int svcid = serviceid;
+                int srvid = serverid;
+                string srvtype = servicetype;
+                string srvname = servicename;
+                int nid = netboardid;
+                int pt = port;
+                string s = clientid;
+                string UpdNtbd = "UPDATE sur.tb_service SET serverid="+srvid+", servicetype="+srvtype+", servicename="+srvname+", netboardid="+nid+", port ="+pt+" WHERE serviceid="+svcid+"; ";
+                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdNtbd, myconnping);
+                myconnping.Open();
+                try
+                {
+                    
+                    mycommping.ExecuteNonQuery();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户更新"+svcid+"号服务数据，成功"), point);
+                    myconnping.Close();
+                    return 0;
+                }
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    myconnping.Close();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户更新" + svcid + "号服务数据，数据库写入失败"), point);
                     var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                     throw new FaultException<WCFError>(error, error.Message);//抛出错误
                 }
@@ -1352,7 +1474,7 @@ namespace BackStageSur
             DataSet SelEmerEmp(string clientid);
             [OperationContract]
             [FaultContract(typeof(WCFError))]
-            int InsSvr(string clientid, string servername, int commyear, string empolyid);
+            int InsSvr(string clientid, string servername, DateTime commyear, string empolyid);
             [OperationContract]
             [FaultContract(typeof(WCFError))]
             int InsEmp(string name, int age, string sex, string tel, string email, string clientid);
@@ -1377,6 +1499,18 @@ namespace BackStageSur
             [OperationContract]
             [FaultContract(typeof(WCFError))]
             int HandleError(int errorid, string p);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int PingIP(string address, ref long RtT, string clientid);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int UpdSvr(int serverid, string clientid, string servername, DateTime commyear, string empolyid);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int UpdNtbd(int netboardid, string url, string clientid);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            int UpdSvc(int serviceid, int serverid, string servicetype, string servicename, int netboardid, int port, string clientid);
         }
 
         private void FrmMain_FormClosing(object sender, FormClosingEventArgs e)
