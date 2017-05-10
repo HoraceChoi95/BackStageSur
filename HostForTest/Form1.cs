@@ -1083,13 +1083,13 @@ namespace BackStageSur
             /// <summary>
             /// 新增一个服务器
             /// </summary>
-            public int InsSvr(string clientid, string servername, DateTime commyear, string empolyid)// TODO:返回服务器号
+            public int InsSvr(string clientid, string servername, DateTime commyear, string empolyid)// 返回服务器号
             {
                 string cid = clientid;
                 string svrname = servername;
                 string cyear = commyear.ToString("yyyy-MM-dd");
                 string eid = empolyid;
-                string InsSvr = "INSERT INTO sur.tb_server(clientid,name,commissionyear,emergency)VALUES(@clientid,@name,@commissionyear,@emergency) SELECT @@IDENTITY AS serverid; ";
+                string InsSvr = "INSERT INTO sur.tb_server(clientid,name,commissionyear,emergency)VALUES(@clientid,@name,@commissionyear,@emergency) ;SELECT distinct lastval() from tb_server ; ";
                 Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsSvr, myconnping);
 
@@ -1101,7 +1101,12 @@ namespace BackStageSur
                     mycommping.Parameters.Add("@commissionyear", NpgsqlTypes.NpgsqlDbType.Date).Value = cyear;
                     mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
                     Npgsql.NpgsqlDataReader R = mycommping.ExecuteReader();
-                    int i = Convert.ToInt16(R.GetValue(0));
+                    int i = 0;
+                    while (R.Read())
+                    {
+                        i = Convert.ToInt16(R[0]);
+                    }
+                    R.Close();
                     server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，成功"), point);
                     log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户新增" + svrname + "服务器，成功", cid);
                     myconnping.Close();
