@@ -7,11 +7,13 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
+using System.Threading;
 
 namespace BackStageSur
 {
     class Log
     {
+        public static ReaderWriterLockSlim rwl = new ReaderWriterLockSlim();
         /**//// <summary>
             /// 写入日志文件
             /// </summary>
@@ -26,7 +28,7 @@ namespace BackStageSur
 
             
 
-            string sFilePath = "d:\\" + DateTime.Now.ToString("yyyyMM");
+            string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM");
             string filename = "" + DateTime.Now.ToString("dd")+""+p+"用户日志.log";
             string fpath = sFilePath + "\\" + filename; //文件的绝对路径
             FileInfo finfo = new FileInfo(fpath);
@@ -35,7 +37,13 @@ namespace BackStageSur
                 Directory.CreateDirectory(sFilePath);
                 //不存在则创建
             }
-
+            if (!finfo.Exists)
+            {
+                FileStream fs;
+                fs = File.Create(fpath);
+                fs.Close();
+                finfo = new FileInfo(fpath);
+            }
             /**/
             ///判断文件是否存在以及是否大于2K
             if (finfo.Length > 1024 * 1024 * 10)
@@ -48,30 +56,49 @@ namespace BackStageSur
             
             ///创建只写文件流
 
-            using (FileStream fs = finfo.OpenWrite())
-            {
-                /**/
-                ///根据上面创建的文件流创建写数据流
-                StreamWriter w = new StreamWriter(fs);
+            
+            
+                 
+               // rwl.EnterUpgradeableReadLock();
+                //try
+                //{
+                    rwl.EnterWriteLock();
 
-                /**/
-                ///设置写数据流的起始位置为文件流的末尾
-                w.BaseStream.Seek(0, SeekOrigin.End);
+                    try
+                    {using (FileStream fs = finfo.OpenWrite())
+                    {/**/
+                        ///根据上面创建的文件流创建写数据流
+                        StreamWriter w = new StreamWriter(fs);
 
-                
+                        /**/
+                        ///设置写数据流的起始位置为文件流的末尾
+                        w.BaseStream.Seek(0, SeekOrigin.End);
 
-                /**/
-                ///写入并换行
-                await w.WriteAsync(input+ "\n\r");
 
-                /**/
-                ///清空缓冲区内容，并把缓冲区内容写入基础流
-                await w.FlushAsync();
 
-                /**/
-                ///关闭写数据流
-                w.Close();
-            }
+                        /**/
+                        ///写入并换行
+                        await w.WriteAsync(input + "\r\n");
+
+                        /**/
+                        ///清空缓冲区内容，并把缓冲区内容写入基础流
+                        await w.FlushAsync();
+
+                        /**/
+                        ///关闭写数据流
+                        w.Close();
+                    }
+                    }
+                    finally
+                    {
+                        rwl.ExitWriteLock();
+                    }
+                //}
+                //finally
+                //{
+                    //rwl.ExitUpgradeableReadLock();
+                //}
+            
 
         }
     }
