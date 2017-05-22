@@ -39,6 +39,7 @@
             this.toolStripStatusLabel5 = new System.Windows.Forms.ToolStripStatusLabel();
             this.menuStrip1 = new System.Windows.Forms.MenuStrip();
             this.邮件ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.邮件参数配置ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.日志ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.查看日志ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
@@ -123,9 +124,18 @@
             // 
             // 邮件ToolStripMenuItem
             // 
+            this.邮件ToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.邮件参数配置ToolStripMenuItem});
             this.邮件ToolStripMenuItem.Name = "邮件ToolStripMenuItem";
             this.邮件ToolStripMenuItem.Size = new System.Drawing.Size(45, 20);
             this.邮件ToolStripMenuItem.Text = "邮件";
+            // 
+            // 邮件参数配置ToolStripMenuItem
+            // 
+            this.邮件参数配置ToolStripMenuItem.Name = "邮件参数配置ToolStripMenuItem";
+            this.邮件参数配置ToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+            this.邮件参数配置ToolStripMenuItem.Text = "邮件参数配置";
+            this.邮件参数配置ToolStripMenuItem.Click += new System.EventHandler(this.邮件参数配置ToolStripMenuItem_Click);
             // 
             // 日志ToolStripMenuItem
             // 
@@ -134,18 +144,21 @@
             this.日志ToolStripMenuItem.Name = "日志ToolStripMenuItem";
             this.日志ToolStripMenuItem.Size = new System.Drawing.Size(45, 20);
             this.日志ToolStripMenuItem.Text = "日志";
+            this.日志ToolStripMenuItem.Click += new System.EventHandler(this.日志ToolStripMenuItem_Click);
             // 
             // 查看日志ToolStripMenuItem
             // 
             this.查看日志ToolStripMenuItem.Name = "查看日志ToolStripMenuItem";
-            this.查看日志ToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+            this.查看日志ToolStripMenuItem.Size = new System.Drawing.Size(126, 22);
             this.查看日志ToolStripMenuItem.Text = "查看日志";
+            this.查看日志ToolStripMenuItem.DropDownItemClicked += new System.Windows.Forms.ToolStripItemClickedEventHandler(this.查看日志ToolStripMenuItem_DropDownItemClicked);
             this.查看日志ToolStripMenuItem.Click += new System.EventHandler(this.查看日志ToolStripMenuItem_Click);
             // 
             // openFileDialog1
             // 
-            this.openFileDialog1.FileName = "openFileDialog1";
+            this.openFileDialog1.Filter = "日志文件(*.log)|*.log|所有文件(*.*)|*.*";
             this.openFileDialog1.InitialDirectory = "D:\\";
+            this.openFileDialog1.Title = "选择日志文件";
             this.openFileDialog1.FileOk += new System.ComponentModel.CancelEventHandler(this.openFileDialog1_FileOk);
             // 
             // FrmMain
@@ -186,6 +199,7 @@
         private System.Windows.Forms.ToolStripMenuItem 日志ToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem 查看日志ToolStripMenuItem;
         private System.Windows.Forms.OpenFileDialog openFileDialog1;
+        private System.Windows.Forms.ToolStripMenuItem 邮件参数配置ToolStripMenuItem;
     }
 }
 
