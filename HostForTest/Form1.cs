@@ -391,8 +391,18 @@ namespace BackStageSur
                 myda.Fill(dt);
                 myconndat.Close();
                 string url = dt.Rows[0][0].ToString().Trim();
-                double avgrtt = Convert.ToDouble(dt.Rows[0][1]);
-                double stddevrtt = Convert.ToDouble(dt.Rows[0][2]);
+                double avgrtt;
+                double stddevrtt;
+                if (DBNull.Value != dt.Rows[0][1])
+                {
+                    avgrtt = Convert.ToDouble(dt.Rows[0][1]);
+                    stddevrtt = Convert.ToDouble(dt.Rows[0][2]);
+                }
+                else
+                {
+                    avgrtt = 50.0;
+                    stddevrtt = 50.0;
+                }
                 ntserverid = Convert.ToInt16(dt.Rows[0][3]);
                 #endregion
 
@@ -460,6 +470,7 @@ namespace BackStageSur
                     {
                         #region  向数据库写入报警数据
                         string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\",handled,clientid,serverid)VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid,@serverid); ";
+                        string MetData = "INSERT INTO sur.tb_ntbdata(netboardid,success, rtt, ttl, df, bfl, \"time\" )VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time); ";
                         Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                         Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
                         myconnping.Open();
@@ -477,7 +488,15 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = ntserverid;
                             mycommping.ExecuteNonQuery();
 
-                           
+                            mycommping.CommandText = MetData;
+                            mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
+                            mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
+                            mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
+                            mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
+                            mycommping.Parameters.Add("@df", NpgsqlTypes.NpgsqlDbType.Boolean).Value = DF;
+                            mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
+                            mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
+                            mycommping.ExecuteNonQuery();
                             server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，往返时长过大"), point);
                             log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + netboardid + "网卡，往返时长过大", p);
                         }

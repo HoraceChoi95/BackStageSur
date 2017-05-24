@@ -16,8 +16,9 @@ namespace BackStageSur
         /// </summary>
         public async void WriteLogFile(string input, string p)
         {
-            string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM") + "\\" + p + ""; //指定日志文件的目录
-            string filename = "" + DateTime.Now.ToString("dd") + "" + p + "用户日志.log";//定义文件信息对象
+            string s = p.Trim();
+            string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM") + "\\" + s + ""; //指定日志文件的目录
+            string filename = "" + DateTime.Now.ToString("dd") + "" + s + "用户日志.log";//定义文件信息对象
             string fpath = sFilePath + "\\" + filename; //文件的绝对路径
             FileInfo finfo = new FileInfo(fpath);
             if (!Directory.Exists(sFilePath))//验证路径是否存在
