@@ -16,6 +16,7 @@ using System.Windows.Forms;
 namespace BackStageSur
 {
     using HoraceOriginal;//添加引用WCFError错误类
+    using System.Threading.Tasks;
 
     [ServiceBehavior(IncludeExceptionDetailInFaults = true)]//返回详细错误信息开启
     public partial class FrmMain : Form
@@ -265,7 +266,7 @@ namespace BackStageSur
                         myconnInit.Close();
                         myconnInit.Dispose();
                         mycommGtSer.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户初始化数据返回成功"), point);                    
+                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户初始化数据返回成功"), point);
                         return dsInit;
                     }
                     catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
@@ -477,7 +478,7 @@ namespace BackStageSur
                             mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = ntserverid;
                             mycommping.ExecuteNonQuery();
 
-                           
+
                             server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，往返时长过大"), point);
                             log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + netboardid + "网卡，往返时长过大", p);
                         }
@@ -517,74 +518,79 @@ namespace BackStageSur
             /// <summary>
             /// 网卡监测方法
             /// </summary>
-            public int PingNetbd(int netboardid, ref long RtT, string p)//同步Ping网卡方法
+            public Task<int> PingNetbdAsync(int netboardid, ref long RtT, string p)//同步Ping网卡方法
+            {
+
+                return PingNetbd(netboardid, ref RtT, p);
+            }
+            public Task<int> PingNetbd(int netboardid, ref long RtT, string p)
             {
                 SPing = new ScndPing(ping);//把函数指定给委托
-                int s = 0;//循环计数器初始化
-                while (s != 2)
-                {
-                    i = SPing.Invoke(netboardid, ref tRtT, p);//同步执行委托
+                                           //int s = 0;//循环计数器初始化
+                                           //while (s != 2)
+                                           //{
+                i = SPing.Invoke(netboardid, ref tRtT, p);//同步执行委托
 
-                    s += 1;//计数器加一
+                //    s += 1;//计数器加一
 
-                    if (i == 1 && s == 1)
-                    {
+                //    if (i == 1 && s == 1)
+                //    {
 
-                        Thread.Sleep(2000);//第一次不成功，睡眠2秒
-                    }
-                    else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
-                    {
-                        #region  向数据库写入失败数据
-                        string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\",handled,clientid,serverid)VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid,@serverid); ";
-                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
-                        myconnping.Open();
-                        RtT = 12000;
-                        int Ttl = 0;
-                        bool DF = false;
-                        int BfL = 32;
-                        try
-                        {
-                            mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
-                            mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
-                            mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
-                            mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
-                            mycommping.Parameters.Add("@df", NpgsqlTypes.NpgsqlDbType.Boolean).Value = DF;
-                            mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
-                            mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
-                            mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
-                            mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
-                            mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = ntserverid;
-                            mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，Ping失败"), point);
-                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + netboardid + "网卡，Ping失败", p);
-                        }
-                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                        {
-                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                        }
-                        catch (TimeoutException te)//如果数据库未在侦听
-                        {
-                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                        }
-                        myconnping.Close();
+                //        Thread.Sleep(2000);//第一次不成功，睡眠2秒
+                //    }
+                //    else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
+                //    {
+                //        #region  向数据库写入失败数据
+                //        string ErrData = "INSERT INTO sur.tb_error(netboardid,success, rtt, ttl, df, bfl, \"time\",handled,clientid,serverid)VALUES(@netboardid, @success, @rtt, @ttl, @df, @bfl, @time, @handled,@clientid,@serverid); ";
+                //        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                //        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
+                //        myconnping.Open();
+                //        RtT = 12000;
+                //        int Ttl = 0;
+                //        bool DF = false;
+                //        int BfL = 32;
+                //        try
+                //        {
+                //            mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = netboardid;
+                //            mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
+                //            mycommping.Parameters.Add("@rtt", NpgsqlTypes.NpgsqlDbType.Bigint).Value = RtT;
+                //            mycommping.Parameters.Add("@ttl", NpgsqlTypes.NpgsqlDbType.Integer).Value = Ttl;
+                //            mycommping.Parameters.Add("@df", NpgsqlTypes.NpgsqlDbType.Boolean).Value = DF;
+                //            mycommping.Parameters.Add("@bfl", NpgsqlTypes.NpgsqlDbType.Integer).Value = BfL;
+                //            mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
+                //            mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
+                //            mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
+                //            mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = ntserverid;
+                //            mycommping.ExecuteNonQuery();
+                //            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + netboardid + "网卡，Ping失败"), point);
+                //            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + netboardid + "网卡，Ping失败", p);
+                //        }
+                //        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                //        {
+                //            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                //            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                //            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                //            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                //        }
+                //        catch (TimeoutException te)//如果数据库未在侦听
+                //        {
+                //            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                //            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                //            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                //            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                //        }
+                //        myconnping.Close();
 
-                        #endregion
-                    }
-                    else break;//如果成功，跳出循环
+                //        #endregion
+                //    }
+                //    else break;//如果成功，跳出循环
 
 
 
-                }
+                //}
 
                 RtT = tRtT;//读取临时变量的值
-                return i;//返回状态
+                return Task.FromResult(i);
 
             }
 
@@ -672,38 +678,433 @@ namespace BackStageSur
             /// </summary>
             public int PingService(int serviceid, string p)
             {
-                STest = new ScndTest(Service);//把函数指定给委托
+
                 int s = 0;//循环计数器初始化
                 while (s != 2)
                 {
-                    i = STest.Invoke(serviceid, p);//同步执行委托
-
                     s += 1;//计数器加一
-
-                    if (i == 1 && s == 1)
+                    #region 从数据库中读取数据
+                    string dat = "select tb_service.netboardid,tb_netboard.url,tb_service.port,tb_netboard.serverid from tb_netboard inner join tb_service on tb_netboard.netboardid=tb_service.netboardid where tb_service.serviceid=" + serviceid + "";
+                    Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                    DataTable dt = new DataTable();
+                    myda.Fill(dt);
+                    svnetboardid = Convert.ToInt16(dt.Rows[0][0]);
+                    string url = dt.Rows[0][1].ToString().Trim();
+                    Int32 port = Convert.ToInt32(dt.Rows[0][2].ToString().Trim());
+                    svserverid = Convert.ToInt16(dt.Rows[0][3]);
+                    myconndat.Close();
+                    #endregion
+                    if (s == 1)
                     {
-
-                        Thread.Sleep(2000);//第一次不成功，睡眠2秒
-                    }
-                    else if (i == 1 && s == 2)//第二次不成功，写入数据并报错
-                    {
-                        #region  向数据库写入失败数据
-                        string ErrData = "INSERT INTO sur.tb_error(netboardid,serviceid,success,\"time\",handled,clientid,serverid)VALUES(@netboardid,@serviceid,@success, @time, @handled,@clientid,@serverid); ";
-                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
-                        myconnping.Open();
                         try
                         {
-                            mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svnetboardid;
-                            mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
-                            mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
-                            mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
-                            mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
-                            mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
-                            mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svserverid;
-                            mycommping.ExecuteNonQuery();
-                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + serviceid + "服务，失败"), point);
-                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + serviceid + "服务，失败", p);
+                            TcpClient tcpClient = new TcpClient();//实例化TCPClient
+                            tcpClient.Connect(IPAddress.Parse(url), port);//建立连接
+                            if (tcpClient.Connected)//如果成功
+                            {
+                                tcpClient.Close();
+                                tcpClient.Dispose();
+                                #region  向数据库写入成功数据
+                                string MetData = "INSERT INTO sur.tb_svcdata(serviceid,success,\"time\" )VALUES(@serviceid, @success, @time); ";
+                                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
+                                myconnping.Open();
+                                try
+                                {
+                                    mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
+                                    mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
+                                    mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
+                                    mycommping.ExecuteNonQuery();
+                                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + serviceid + "服务，成功"), point);
+                                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + serviceid + "服务，成功", p);
+                                }
+                                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                                {
+                                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                    var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
+
+                                }
+                                catch (TimeoutException te)//如果数据库未在侦听
+                                {
+                                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+
+                                }
+                                myconnping.Close();
+
+                                #endregion
+                                return 0;
+                            }
+                            else//如果不成功
+                            {
+
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+
+                        }
+                            
+                    }
+                    else
+                    {
+                            try
+                            {
+                                TcpClient tcpClient = new TcpClient();//实例化TCPClient
+                                tcpClient.Connect(IPAddress.Parse(url), port);//建立连接
+                                if (tcpClient.Connected)//如果成功
+                                {
+                                    tcpClient.Close();
+                                    tcpClient.Dispose();
+                                    #region  向数据库写入成功数据
+                                    string MetData = "INSERT INTO sur.tb_svcdata(serviceid,success,\"time\" )VALUES(@serviceid, @success, @time); ";
+                                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(MetData, myconnping);
+                                    myconnping.Open();
+                                    try
+                                    {
+                                        mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
+                                        mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = true;
+                                        mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
+                                        mycommping.ExecuteNonQuery();
+                                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + serviceid + "服务，成功"), point);
+                                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + serviceid + "服务，成功", p);
+                                    }
+                                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                                    {
+                                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
+
+                                    }
+                                    catch (TimeoutException te)//如果数据库未在侦听
+                                    {
+                                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+
+                                    }
+                                    myconnping.Close();
+
+                                    #endregion
+                                    return 0;
+                                }
+                                else//如果不成功
+                                {
+
+                                }
+
+                            }
+                            catch (Exception ex)
+                            {
+                                #region  向数据库写入失败数据
+                                string ErrData = "INSERT INTO sur.tb_error(netboardid,serviceid,success,\"time\",handled,clientid,serverid)VALUES(@netboardid,@serviceid,@success, @time, @handled,@clientid,@serverid); ";
+                                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ErrData, myconnping);
+                                myconnping.Open();
+                                try
+                                {
+                                    mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svnetboardid;
+                                    mycommping.Parameters.Add("@serviceid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = serviceid;
+                                    mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
+                                    mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
+                                    mycommping.Parameters.Add("@handled", NpgsqlTypes.NpgsqlDbType.Boolean).Value = false;
+                                    mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = p;
+                                    mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Numeric).Value = svserverid;
+                                    mycommping.ExecuteNonQuery();
+                                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户监测" + serviceid + "服务，失败"), point);
+                                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户监测" + serviceid + "服务，失败", p);
+                                }
+                                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                                {
+                                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                                }
+                                catch (TimeoutException te)//如果数据库未在侦听
+                                {
+                                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                                }
+                                myconnping.Close();
+                                #endregion
+                            }
+
+
+
+
+                        }
+
+
+
+                    }
+                }
+            }
+                    /// <summary>
+                    /// 已经报错的网卡切换到此方法监测，不向数据库写入信息
+                    /// </summary>
+                    public int ErrNtbd(int netboardid)
+                    {
+                        #region 从数据库中读取数据
+                        string dat = "select url from tb_netboard where tb_netboard.netboardid=" + netboardid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        string url = dt.Rows[0][0].ToString().Trim();
+                        myconndat.Close();
+                        #endregion
+
+                        Ping pingSender = new Ping();
+                        PingOptions options = new PingOptions();
+                        // 使用默认TTL值128,
+                        // but change the fragmentation behavior.
+                        options.DontFragment = true;
+                        // Create a buffer of 32 bytes of data to be transmitted.
+                        string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+                        byte[] buffer = Encoding.ASCII.GetBytes(data);
+                        int timeout = 120;
+                        IPAddress Address = IPAddress.Parse(url);
+                        PingReply reply = pingSender.Send(Address, timeout, buffer, options);
+                        if (reply.Status == IPStatus.Success)
+                        {
+                            return 0;
+                        }
+                        else
+                        {
+                            return 1;
+                        }
+                    }
+
+                    /// <summary>
+                    /// 已经报错的服务切换到此方法监测，不向数据库写入信息
+                    /// </summary>
+                    public int ErrSvc(int serviceid)
+                    {
+                        #region 从数据库中读取数据
+                        string dat = "select tb_netboard.url,tb_service.port from tb_netboard inner join tb_service on tb_netboard.netboardid=tb_service.netboardid where tb_service.serviceid=" + serviceid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        string url = dt.Rows[0][0].ToString().Trim();
+                        Int32 port = Convert.ToInt32(dt.Rows[0][1].ToString().Trim());
+                        myconndat.Close();
+                        #endregion
+                        #region 测试连接
+                        TcpClient tcpClient = new TcpClient();//实例化TCPClient
+                        try
+                        {
+                            tcpClient.Connect(IPAddress.Parse(url), port);//建立连接
+                            if (tcpClient.Connected)//如果成功
+                            {
+                                tcpClient.Close();
+                                tcpClient.Dispose();
+                                return 0;
+                            }
+                            else//如果不成功
+                            {
+                                return 1;//返回错误
+                            }
+                        }
+                        catch (Exception ex)//如果不成功
+                        {
+                            tcpClient.Close();
+                            tcpClient.Dispose();
+                            return 1;//返回错误
+                        }
+                        #endregion
+                    }
+
+                    /// <summary>
+                    /// 读取特定服务器上的网卡和服务的详细信息，p为clientid
+                    /// </summary>
+                    public DataSet SvrDetl(int serverid, string p)
+                    {
+
+                        string s = p;
+                        if (s == "admin")
+                        {
+                            try
+                            {
+                                string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.serverid=" + serverid + "";
+                                string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.serverid=" + serverid + "";
+                                string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,tb_service.description from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.serverid=" + serverid + "";
+                                Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
+                                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
+                                myconnInit.Open();
+                                DataTable dtGtSer = new DataTable("Server");
+                                DataSet dsInit = new DataSet("Intialize");
+                                myda.Fill(dtGtSer);
+                                mycommGtSer.CommandText = sqlstrGtNetbd;
+                                myda.SelectCommand.CommandText = sqlstrGtNetbd;
+                                DataTable dtGtNetbd = new DataTable("Netboard");
+                                myda.Fill(dtGtNetbd);
+                                DataTable dtGtNetbd2 = new DataTable("Netboard");
+                                dtGtNetbd2 = ChangeColumnType(dtGtNetbd);
+                                mycommGtSer.CommandText = sqlstrGtSrvis;
+                                myda.SelectCommand.CommandText = sqlstrGtSrvis;
+                                DataTable dtGtSrvis = new DataTable("Service");
+                                myda.Fill(dtGtSrvis);
+                                dsInit.Tables.Add(dtGtSer);
+                                dsInit.Tables.Add(dtGtNetbd2);
+                                dsInit.Tables.Add(dtGtSrvis);
+                                myconnInit.Close();
+                                myconnInit.Dispose();
+                                mycommGtSer.Dispose();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询" + serverid + "服务器详细信息，成功"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询" + serverid + "服务器详细信息，成功", s);
+                                return dsInit;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
+                                string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
+                                string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,tb_service.description from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
+                                Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
+                                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
+                                myconnInit.Open();
+                                DataTable dtGtSer = new DataTable("Server");
+                                DataSet dsInit = new DataSet("Intialize");
+                                myda.Fill(dtGtSer);
+                                mycommGtSer.CommandText = sqlstrGtNetbd;
+                                myda.SelectCommand.CommandText = sqlstrGtNetbd;
+                                DataTable dtGtNetbd = new DataTable("Netboard");
+                                myda.Fill(dtGtNetbd);
+                                DataTable dtGtNetbd2 = new DataTable("Netboard");
+                                dtGtNetbd2 = ChangeColumnType(dtGtNetbd);
+                                mycommGtSer.CommandText = sqlstrGtSrvis;
+                                myda.SelectCommand.CommandText = sqlstrGtSrvis;
+                                DataTable dtGtSrvis = new DataTable("Service");
+                                myda.Fill(dtGtSrvis);
+                                dsInit.Tables.Add(dtGtSer);
+                                dsInit.Tables.Add(dtGtNetbd2);
+                                dsInit.Tables.Add(dtGtSrvis);
+                                myconnInit.Close();
+                                myconnInit.Dispose();
+                                mycommGtSer.Dispose();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器详细信息，成功"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户查询" + serverid + "服务器详细信息，成功", s);
+                                return dsInit;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                    }
+
+
+
+                    /// <summary>
+                    /// 读取某用户的员工详细信息
+                    /// </summary>
+                    public DataSet ClientDetail(string employid, string p)
+                    {
+                        try
+                        {
+                            string s = p;
+                            string sqlstrGtCD = "select * from sur.tb_client where tb_client.employid='" + employid + "'";
+                            Npgsql.NpgsqlConnection myconnGtCD = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtCD, myconnGtCD);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtCD, myconnGtCD);
+                            myconnGtCD.Open();
+                            DataTable dtGtCD = new DataTable("员工");
+                            DataSet dsGtCD = new DataSet("ClientDetail");
+                            myda.Fill(dtGtCD);
+                            dsGtCD.Tables.Add(dtGtCD);
+                            myconnGtCD.Close();
+                            myconnGtCD.Dispose();
+                            mycommGtSer.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询员工详细信息，成功"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询员工详细信息，成功", p);
+                            return dsGtCD;
+                        }
+
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+
+                    }
+
+                    /// <summary>
+                    /// 读取某个服务器所有已处理和未处理的错误
+                    /// </summary>
+                    public DataSet SelSrvErr(int serverid, string p)
+                    {
+                        try
+                        {
+                            string s = p;
+                            string sqlstrSLER = "select * from sur.tb_error where tb_error.serverid=" + serverid + " and tb_error.clientid='" + p + "'";
+                            string sqlstrSLER1 = "select * from sur.tb_error where tb_error.serverid=" + serverid + " and tb_error.clientid='" + p + "' and handled=false";
+                            Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER, myconnSLER);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER, myconnSLER);
+                            myconnSLER.Open();
+                            DataTable dtSLER = new DataTable("所有错误");
+                            DataTable dtSLER1 = new DataTable("未处理错误");
+                            DataSet dsSLER = new DataSet("Errors");
+                            myda.Fill(dtSLER);
+                            dsSLER.Tables.Add(dtSLER);
+                            mycommGtSer.CommandText = sqlstrSLER1;
+                            myda.SelectCommand.CommandText = sqlstrSLER1;
+                            myda.Fill(dtSLER1);
+                            dsSLER.Tables.Add(dtSLER1);
+                            myconnSLER.Close();
+                            myconnSLER.Dispose();
+                            mycommGtSer.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器错误详细信息，成功"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器错误详细信息，成功", p);
+                            return dsSLER;
                         }
                         catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
                         {
@@ -719,1801 +1120,1516 @@ namespace BackStageSur
                             var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
                             throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
                         }
-                        myconnping.Close();
+
+                    }
+
+                    /// <summary>
+                    /// 读取某个用户所有未处理的错误
+                    /// </summary>
+                    public DataSet SelUhdErr(string p)
+                    {
+                        try
+                        {
+                            string s = p;
+                            string sqlstrSLUE = "select * from sur.tb_error where tb_error.clientid='" + p + "' and handled=false";
+                            Npgsql.NpgsqlConnection myconnSLUE = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommSLUE = new Npgsql.NpgsqlCommand(sqlstrSLUE, myconnSLUE);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLUE, myconnSLUE);
+                            myconnSLUE.Open();
+                            DataTable dtSLUE = new DataTable("未处理错误");
+                            DataSet dsSLUE = new DataSet("Errors");
+                            mycommSLUE.CommandText = sqlstrSLUE;
+                            myda.SelectCommand.CommandText = sqlstrSLUE;
+                            myda.Fill(dtSLUE);
+                            dsSLUE.Tables.Add(dtSLUE);
+                            myconnSLUE.Close();
+                            myconnSLUE.Dispose();
+                            mycommSLUE.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询未处理错误详细信息，成功"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询未处理错误详细信息，成功", p);
+                            return dsSLUE;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+
+                    }
+
+                    /// <summary>
+                    /// 读取用户指定网卡的指定条数的最近错误
+                    /// </summary>
+                    public DataSet SelNtbRctErr(int netboardid, int count, string p)
+                    {
+                        try
+                        {
+                            string s = p;
+                            int ntbid = netboardid;
+                            int ct = count;
+                            string sqlstrSNRE = "select * from tb_error where tb_error.netboardid=" + ntbid + " and tb_error.clientid='" + s + "' and tb_error.serviceid is null order by time desc limit " + ct + "";
+                            Npgsql.NpgsqlConnection myconnSNRE = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSNRE, myconnSNRE);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNRE, myconnSNRE);
+                            myconnSNRE.Open();
+                            DataTable dtSNRE = new DataTable("网卡最近错误");
+                            DataSet dsSNRE = new DataSet("NtbRctErrors");
+                            mycommGtSer.CommandText = sqlstrSNRE;
+                            myda.SelectCommand.CommandText = sqlstrSNRE;
+                            myda.Fill(dtSNRE);
+                            dsSNRE.Tables.Add(dtSNRE);
+                            myconnSNRE.Close();
+                            myconnSNRE.Dispose();
+                            mycommGtSer.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡未处理最近" + count + "条错误详细信息，成功"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询" + netboardid + "号网卡未处理最近" + count + "条错误详细信息，成功", p);
+                            return dsSNRE;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+                    }
+
+                    /// <summary>
+                    /// 读取数据库中所有员工信息
+                    /// </summary>
+                    public DataSet SelAllEmp()
+                    {
+                        try
+                        {
+                            string sqlstrSEE = "select * from tb_client;";
+                            Npgsql.NpgsqlConnection myconnSEE = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSEE, myconnSEE);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSEE, myconnSEE);
+                            myconnSEE.Open();
+                            DataTable dtSEE = new DataTable("员工");
+                            DataSet dsSEE = new DataSet("emlpoyee");
+                            mycommGtSer.CommandText = sqlstrSEE;
+                            myda.SelectCommand.CommandText = sqlstrSEE;
+                            myda.Fill(dtSEE);
+                            dsSEE.Tables.Add(dtSEE);
+                            myconnSEE.Close();
+                            myconnSEE.Dispose();
+                            mycommGtSer.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员选择所有员工信息，成功"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员选择所有员工信息，成功", "admin");
+                            return dsSEE;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+                    }
+                    /// <summary>
+                    /// 新增一个服务器
+                    /// </summary>
+                    public int InsSvr(string clientid, string servername, DateTime commyear, string empolyid, string description)// 返回服务器号
+                    {
+                        string cid = clientid;
+                        string svrname = servername;
+                        string cyear = commyear.ToString("yyyy-MM-dd");
+                        string eid = empolyid;
+                        string InsSvr = "INSERT INTO sur.tb_server(clientid,name,commissionyear,emergency,description)VALUES(@clientid,@name,@commissionyear,@emergency,@description) ;SELECT distinct lastval() from tb_server ; ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsSvr, myconnping);
+
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = cid;
+                            mycommping.Parameters.Add("@name", NpgsqlTypes.NpgsqlDbType.Char, 40).Value = svrname;
+                            mycommping.Parameters.Add("@commissionyear", NpgsqlTypes.NpgsqlDbType.Date).Value = cyear;
+                            mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
+                            mycommping.Parameters.Add("@description", NpgsqlTypes.NpgsqlDbType.Varchar, 200).Value = description;
+                            Npgsql.NpgsqlDataReader R = mycommping.ExecuteReader();
+                            int i = 0;
+                            while (R.Read())
+                            {
+                                i = Convert.ToInt16(R[0]);
+                            }
+                            R.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，成功"), point);
+                            log.logDB(cid, "新增" + svrname + "服务器", true);
+                            myconnping.Close();
+                            return i;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+                    }
+                    /// <summary>
+                    /// 新增一个雇员
+                    /// </summary>
+                    public int InsEmp(string employid, string name, DateTime birth, string sex, string tel, string email, bool emergency, string clientid)
+                    {
+                        string eid = employid;
+                        string nme = name;
+                        string ag = birth.ToString("yyyy-MM-dd");
+                        string gender = sex;
+                        string at = email;
+                        string InsEmp = "INSERT INTO sur.tb_client(employid,name,birth,tel,email,sex,emergency)VALUES(@employid,@name,@birth,@tel,@email,@sex,@emergency); ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsEmp, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
+                            mycommping.Parameters.Add("@name", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = nme;
+                            mycommping.Parameters.Add("@birth", NpgsqlTypes.NpgsqlDbType.Date).Value = ag;
+                            mycommping.Parameters.Add("@tel", NpgsqlTypes.NpgsqlDbType.Char, 15).Value = tel;
+                            mycommping.Parameters.Add("@email", NpgsqlTypes.NpgsqlDbType.Char, 30).Value = at;
+                            mycommping.Parameters.Add("@sex", NpgsqlTypes.NpgsqlDbType.Char, 5).Value = gender;
+                            mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Boolean).Value = emergency;
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户新增" + nme + "雇员，成功"), point);
+                            log.logDB(clientid, "新增" + nme + "雇员", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户新增" + nme + "雇员，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+
+                        }
+                    }
+
+                    /// <summary>
+                    /// 读取网卡最近的指定条数据
+                    /// </summary>
+                    public DataSet SelNtbRctData(int netboardid, int count, string p)
+                    {
+                        try
+                        {
+                            string s = p;
+                            int ntbid = netboardid;
+                            int ct = count;
+                            string sqlstrSNRD = "select * from tb_ntbdata where tb_ntbdata.netboardid=" + ntbid + " order by time desc limit " + ct + "";
+                            Npgsql.NpgsqlConnection myconnSNRD = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommSNRD = new Npgsql.NpgsqlCommand(sqlstrSNRD, myconnSNRD);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNRD, myconnSNRD);
+                            myconnSNRD.Open();
+                            DataTable dtSNRD = new DataTable("网卡最近数据");
+                            DataSet dsSNRD = new DataSet("NtbRctData");
+                            mycommSNRD.CommandText = sqlstrSNRD;
+                            myda.SelectCommand.CommandText = sqlstrSNRD;
+                            myda.Fill(dtSNRD);
+                            dsSNRD.Tables.Add(dtSNRD);
+                            myconnSNRD.Close();
+                            myconnSNRD.Dispose();
+                            mycommSNRD.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，成功"), point);
+                            return dsSNRD;
+                        }
+
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+                    }
+
+
+                    /// <summary>
+                    /// 在服务器上新增一块网卡(如果serverid不属于该client，会返回1)
+                    /// </summary>
+                    //DONE：确认Server属性中clientid和参数值相等
+                    public int InsNtbd(int serverid, string url, string clientid)
+                    {
+                        string cid = clientid;
+                        int sid = serverid;
+                        string ip = url;
+                        #region 从数据库中读取数据
+                        string dat = "select clientid from tb_server where tb_server.serverid=" + sid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        string cidverify = dt.Rows[0][0].ToString().Trim();
+
                         #endregion
+                        if (cidverify == cid.Trim())
+                        {
+                            IPAddress Adress = IPAddress.Parse(url.Trim());
+                            string InsNtbd = "INSERT INTO sur.tb_netboard(serverid,url)VALUES(@serverid,@url); ";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = sid;
+                                mycommping.Parameters.Add("@url", NpgsqlTypes.NpgsqlDbType.Inet).Value = Adress;
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);
+                                log.logDB(cid, "在" + sid + "号服务器上新增网卡", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                        else if (cid == "admin")
+                        {
+                            IPAddress Adress = IPAddress.Parse(url.Trim());
+                            string InsNtbd = "INSERT INTO sur.tb_netboard(serverid,url)VALUES(@serverid,@url); ";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = sid;
+                                mycommping.Parameters.Add("@url", NpgsqlTypes.NpgsqlDbType.Inet).Value = Adress;
+
+
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);
+                                log.logDB(cid, "在" + sid + "号服务器上新增网卡", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                        else return 1;
                     }
-                    else break;//如果成功，跳出循环
+                    /// <summary>
+                    /// 在网卡上新增一个服务(如果serverid不属于该client或网卡不属于该服务器，会返回1)
+                    /// </summary>
 
-
-
-                }
-
-
-                return i;//返回状态
-            }
-            /// <summary>
-            /// 已经报错的网卡切换到此方法监测，不向数据库写入信息
-            /// </summary>
-            public int ErrNtbd(int netboardid)
-            {
-                #region 从数据库中读取数据
-                string dat = "select url from tb_netboard where tb_netboard.netboardid=" + netboardid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                string url = dt.Rows[0][0].ToString().Trim();
-                myconndat.Close();
-                #endregion
-
-                Ping pingSender = new Ping();
-                PingOptions options = new PingOptions();
-                // 使用默认TTL值128,
-                // but change the fragmentation behavior.
-                options.DontFragment = true;
-                // Create a buffer of 32 bytes of data to be transmitted.
-                string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-                byte[] buffer = Encoding.ASCII.GetBytes(data);
-                int timeout = 120;
-                IPAddress Address = IPAddress.Parse(url);
-                PingReply reply = pingSender.Send(Address, timeout, buffer, options);
-                if (reply.Status == IPStatus.Success)
-                {
-                    return 0;
-                }
-                else
-                {
-                    return 1;
-                }
-            }
-
-            /// <summary>
-            /// 已经报错的服务切换到此方法监测，不向数据库写入信息
-            /// </summary>
-            public int ErrSvc(int serviceid)
-            {
-                #region 从数据库中读取数据
-                string dat = "select tb_netboard.url,tb_service.port from tb_netboard inner join tb_service on tb_netboard.netboardid=tb_service.netboardid where tb_service.serviceid=" + serviceid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                string url = dt.Rows[0][0].ToString().Trim();
-                Int32 port = Convert.ToInt32(dt.Rows[0][1].ToString().Trim());
-                myconndat.Close();
-                #endregion
-                #region 测试连接
-                TcpClient tcpClient = new TcpClient();//实例化TCPClient
-                try
-                {
-                    tcpClient.Connect(IPAddress.Parse(url), port);//建立连接
-                    if (tcpClient.Connected)//如果成功
+                    public int InsSvc(int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description)
                     {
-                        tcpClient.Close();
-                        tcpClient.Dispose();
-                        return 0;
+                        int srvid = serverid;
+                        string srvtype = servicetype;
+                        string srvname = servicename;
+                        int nid = netboardid;
+                        int pt = port;
+                        string s = clientid;
+                        #region 从数据库中读取数据
+                        string dat = "select tb_server.serverid,clientid from tb_server inner join tb_netboard on tb_server.serverid=tb_netboard.serverid where tb_netboard.netboardid=" + netboardid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        int sidverify = Convert.ToInt16(dt.Rows[0][0]);
+                        string cidverify = dt.Rows[0][1].ToString().Trim();
+                        #endregion
+                        if (cidverify == s.Trim() && sidverify == srvid)
+                        {
+
+                            string InsNtbd = "INSERT INTO sur.tb_service(serverid,servicetype,servicename,netboardid,port,description)VALUES(@serverid,@servicetype,@servicename,@netboardid,@port,@description); ";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = srvid;
+                                mycommping.Parameters.Add("@servicetype", NpgsqlTypes.NpgsqlDbType.Char, 15).Value = srvtype;
+                                mycommping.Parameters.Add("@servicename", NpgsqlTypes.NpgsqlDbType.Char, 20).Value = srvname;
+                                mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Integer).Value = nid;
+                                mycommping.Parameters.Add("@port", NpgsqlTypes.NpgsqlDbType.Integer).Value = pt;
+                                mycommping.Parameters.Add("@description", NpgsqlTypes.NpgsqlDbType.Varchar, 200).Value = description;
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，成功"), point);
+                                log.logDB(s, "在" + srvid + "号服务器" + nid + "号网卡上新增服务", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var error = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else if (s == "admin" && sidverify == srvid)
+                        {
+                            string InsNtbd = "INSERT INTO sur.tb_service(serverid,servicetype,servicename,netboardid,port,description)VALUES(@serverid,@servicetype,@servicename,@netboardid,@port,@description); ";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = srvid;
+                                mycommping.Parameters.Add("@servicetype", NpgsqlTypes.NpgsqlDbType.Char, 15).Value = srvtype;
+                                mycommping.Parameters.Add("@servicename", NpgsqlTypes.NpgsqlDbType.Char, 20).Value = srvname;
+                                mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Integer).Value = nid;
+                                mycommping.Parameters.Add("@port", NpgsqlTypes.NpgsqlDbType.Integer).Value = pt;
+                                mycommping.Parameters.Add("@description", NpgsqlTypes.NpgsqlDbType.Varchar, 200).Value = description;
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，成功"), point);
+                                log.logDB(s, "在" + srvid + "号服务器" + nid + "号网卡上新增服务", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+
+                            }
+                        }
+                        else return 1;
                     }
-                    else//如果不成功
+
+                    /// <summary>
+                    /// 读取网卡最近一段时间内的数据(starttime是相对较小日期时间)
+                    /// </summary>
+                    public DataSet SelNtbBwnData(int netboardid, string p, DateTime starttime, DateTime endtime)
                     {
-                        return 1;//返回错误
+                        string s = p;
+                        int ntbid = netboardid;
+                        string stime = starttime.ToString();
+                        string etime = endtime.ToString();
+                        try
+                        {
+                            string sqlstrSNBD = "select * from tb_ntbdata where tb_ntbdata.netboardid=" + netboardid + " and time >= '" + stime + "'::timestamp and time <= '" + etime + "'::timestamp order by time desc";
+                            Npgsql.NpgsqlConnection myconnSNBD = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommSNBD = new Npgsql.NpgsqlCommand(sqlstrSNBD, myconnSNBD);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNBD, myconnSNBD);
+                            myconnSNBD.Open();
+                            DataTable dtSNBD = new DataTable("网卡时间段数据");
+                            DataSet dsSNBD = new DataSet("NtbBwnData");
+                            mycommSNBD.CommandText = sqlstrSNBD;
+                            myda.SelectCommand.CommandText = sqlstrSNBD;
+                            myda.Fill(dtSNBD);
+                            dsSNBD.Tables.Add(dtSNBD);
+                            myconnSNBD.Close();
+                            myconnSNBD.Dispose();
+                            mycommSNBD.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从" + stime + "到" + etime + "时间段数据详细信息，成功"), point);
+                            return dsSNBD;
+                        }
+
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从" + stime + "到" + etime + "时间段数据详细信息，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
                     }
-                }
-                catch (Exception ex)//如果不成功
-                {
-                    tcpClient.Close();
-                    tcpClient.Dispose();
-                    return 1;//返回错误
-                }
-                #endregion
-            }
-
-            /// <summary>
-            /// 读取特定服务器上的网卡和服务的详细信息，p为clientid
-            /// </summary>
-            public DataSet SvrDetl(int serverid, string p)
-            {
-
-                string s = p;
-                if (s == "admin")
-                {
-                    try
+                    /// <summary>
+                    /// 处理错误
+                    /// </summary>
+                    public int HandleError(int errorid, string description, string p)
                     {
-                        string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.serverid=" + serverid + "";
-                        string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.serverid=" + serverid + "";
-                        string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,tb_service.description from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.serverid=" + serverid + "";
-                        Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
-                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
-                        myconnInit.Open();
-                        DataTable dtGtSer = new DataTable("Server");
-                        DataSet dsInit = new DataSet("Intialize");
-                        myda.Fill(dtGtSer);
-                        mycommGtSer.CommandText = sqlstrGtNetbd;
-                        myda.SelectCommand.CommandText = sqlstrGtNetbd;
-                        DataTable dtGtNetbd = new DataTable("Netboard");
-                        myda.Fill(dtGtNetbd);
-                        DataTable dtGtNetbd2 = new DataTable("Netboard");
-                        dtGtNetbd2 = ChangeColumnType(dtGtNetbd);
-                        mycommGtSer.CommandText = sqlstrGtSrvis;
-                        myda.SelectCommand.CommandText = sqlstrGtSrvis;
-                        DataTable dtGtSrvis = new DataTable("Service");
-                        myda.Fill(dtGtSrvis);
-                        dsInit.Tables.Add(dtGtSer);
-                        dsInit.Tables.Add(dtGtNetbd2);
-                        dsInit.Tables.Add(dtGtSrvis);
-                        myconnInit.Close();
-                        myconnInit.Dispose();
-                        mycommGtSer.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询" + serverid + "服务器详细信息，成功"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询" + serverid + "服务器详细信息，成功", s);
-                        return dsInit;
+                        int eid = errorid;
+                        string clientid = p;
+                        string HE = "UPDATE tb_error SET  handled=true, description='" + description + "' WHERE errorid=" + eid + " and clientid='" + clientid + "'";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(HE, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户处理" + eid + "号错误，成功"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户处理" + eid + "号错误，成功", clientid);
+                            log.logDB(clientid, "处理" + eid + "号错误", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            myconnping.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户处理" + eid + "号错误，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
                     }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                    /// <summary>
+                    /// 用于测试网卡IP地址的正确与否，不写入数据。正常返回0，失败返回1。
+                    /// </summary>
+                    public int PingIP(string address, ref long RtT, string clientid)
                     {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        string url = address;
+                        string p = clientid;
+                        Ping pingSender = new Ping();
+                        PingOptions options = new PingOptions();
+                        // 使用默认TTL值128,
+                        // but change the fragmentation behavior.
+                        options.DontFragment = true;
+                        // Create a buffer of 32 bytes of data to be transmitted.
+                        string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+                        byte[] buffer = Encoding.ASCII.GetBytes(data);
+                        int timeout = 120;
+                        IPAddress Address = IPAddress.Parse(url);
+                        PingReply reply = pingSender.Send(Address, timeout, buffer, options);
+                        if (reply.Status == IPStatus.Success)
+                        {
+                            RtT = reply.RoundtripTime;
+                            return 0;
+                        }
+                        else
+                        {
+                            RtT = 12000;
+                            return 1;
+                        }
                     }
-                    catch (TimeoutException te)//如果数据库未在侦听
+                    /// <summary>
+                    /// 更新服务器信息
+                    /// </summary>
+                    public int UpdSvr(int serverid, string clientid, string servername, DateTime commyear, string emergency, string description)
                     {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        int sid = serverid;
+                        string cid = clientid;
+                        string svrname = servername;
+                        string cyear = commyear.ToString("yyyy-MM-dd");
+                        string eid = emergency;
+                        string UpdSvr = "UPDATE sur.tb_server SET clientid='" + cid + "', name='" + svrname + "', emergency='" + eid + "', commissionyear='" + cyear + "',description='" + description + "' WHERE serverid=" + sid + "; ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvr, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + svrname + "服务器信息，成功"), point);
+                            log.logDB(cid, "更新" + svrname + "服务器信息", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + svrname + "服务器信息，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户更新" + svrname + "服务器信息，数据库写入失败", cid);
+                            var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
                     }
-                }
-                else
-                {
-                    try
+                    /// <summary>
+                    /// 更新网卡信息
+                    /// </summary>
+                    public int UpdNtbd(int netboardid, string url, string clientid)
                     {
-                        string sqlstrGtSrvr = "select * from sur.tb_server where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
-                        string sqlstrGtNetbd = "select netboardid,tb_netboard.serverid,url from tb_netboard inner join tb_server on tb_netboard.serverid=tb_server.serverid where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
-                        string sqlstrGtSrvis = "select serviceid,tb_service.serverid,servicetype,servicename,netboardid,port,tb_service.description from tb_service inner join tb_server on tb_service.serverid=tb_server.serverid where tb_server.clientid='" + s + "' and tb_server.serverid=" + serverid + "";
-                        Npgsql.NpgsqlConnection myconnInit = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtSrvr, myconnInit);
-                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtSrvr, myconnInit);
-                        myconnInit.Open();
-                        DataTable dtGtSer = new DataTable("Server");
-                        DataSet dsInit = new DataSet("Intialize");
-                        myda.Fill(dtGtSer);
-                        mycommGtSer.CommandText = sqlstrGtNetbd;
-                        myda.SelectCommand.CommandText = sqlstrGtNetbd;
-                        DataTable dtGtNetbd = new DataTable("Netboard");
-                        myda.Fill(dtGtNetbd);
-                        DataTable dtGtNetbd2 = new DataTable("Netboard");
-                        dtGtNetbd2 = ChangeColumnType(dtGtNetbd);
-                        mycommGtSer.CommandText = sqlstrGtSrvis;
-                        myda.SelectCommand.CommandText = sqlstrGtSrvis;
-                        DataTable dtGtSrvis = new DataTable("Service");
-                        myda.Fill(dtGtSrvis);
-                        dsInit.Tables.Add(dtGtSer);
-                        dsInit.Tables.Add(dtGtNetbd2);
-                        dsInit.Tables.Add(dtGtSrvis);
-                        myconnInit.Close();
-                        myconnInit.Dispose();
-                        mycommGtSer.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器详细信息，成功"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户查询" + serverid + "服务器详细信息，成功", s);
-                        return dsInit;
+                        string cid = clientid;
+                        int nid = netboardid;
+                        IPAddress Adress = IPAddress.Parse(url.Trim());
+                        string UpdNtbd = "UPDATE tb_netboard SET url='" + Adress + "' WHERE netboardid=" + nid + "; ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdNtbd, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + nid + "号网卡信息，成功"), point);
+                            log.logDB(cid, "更新" + nid + "号网卡信息", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + nid + "号网卡信息，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
                     }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                    /// <summary>
+                    /// 更新服务信息
+                    /// </summary>
+                    public int UpdSvc(int serviceid, int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description)
                     {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                        int svcid = serviceid;
+                        int srvid = serverid;
+                        string srvtype = servicetype;
+                        string srvname = servicename;
+                        int nid = netboardid;
+                        int pt = port;
+                        string s = clientid;
+                        string UpdSvc = "UPDATE sur.tb_service SET serverid=" + srvid + ", servicetype='" + srvtype + "', servicename='" + srvname + "', netboardid=" + nid + ", port =" + pt + ",description='" + description + "' WHERE serviceid=" + svcid + "; ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvc, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.ExecuteNonQuery();
+                            myconnping.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户更新" + svcid + "号服务数据，成功"), point);
+                            log.logDB(s, "更新" + svcid + "号服务数据", true);
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户更新" + svcid + "号服务数据，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
                     }
-                    catch (TimeoutException te)//如果数据库未在侦听
+
+                    public int UpdEmp(string empolyid, string name, string sex, DateTime birth, string tel, string email, bool emergency, string clientid)
                     {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        string eid = empolyid;
+                        string nme = name;
+                        string gender = sex;
+                        string ag = birth.ToString("yyyy-MM-dd");
+                        string number = tel;
+                        string em = email;
+                        bool emer = emergency;
+                        if (eid == "admin")
+                        {
+                            string UpdEmp = "UPDATE tb_client SET employid ='" + eid + "', name ='" + nme + "', sex ='" + gender + "', birth ='" + ag + "', tel ='" + number + "', email ='" + em + "', emergency =null WHERE tb_client.employid='" + empolyid + "' ;";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdEmp, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，成功"), point);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，数据库写入失败"), point);
+                                var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else
+                        {
+                            string UpdEmp = "UPDATE tb_client SET employid ='" + eid + "', name ='" + nme + "', sex ='" + gender + "', birth ='" + ag + "', tel ='" + number + "', email ='" + em + "', emergency =" + emer + " WHERE tb_client.employid='" + empolyid + "' ;";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdEmp, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，成功"), point);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，数据库写入失败"), point);
+                                var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
                     }
-                }
-            }
 
-
-
-            /// <summary>
-            /// 读取某用户的员工详细信息
-            /// </summary>
-            public DataSet ClientDetail(string employid, string p)
-            {
-                try
-                {
-                    string s = p;
-                    string sqlstrGtCD = "select * from sur.tb_client where tb_client.employid='" + employid + "'";
-                    Npgsql.NpgsqlConnection myconnGtCD = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrGtCD, myconnGtCD);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrGtCD, myconnGtCD);
-                    myconnGtCD.Open();
-                    DataTable dtGtCD = new DataTable("员工");
-                    DataSet dsGtCD = new DataSet("ClientDetail");
-                    myda.Fill(dtGtCD);
-                    dsGtCD.Tables.Add(dtGtCD);
-                    myconnGtCD.Close();
-                    myconnGtCD.Dispose();
-                    mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询员工详细信息，成功"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询员工详细信息，成功", p);
-                    return dsGtCD;
-                }
-
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-
-            }
-
-            /// <summary>
-            /// 读取某个服务器所有已处理和未处理的错误
-            /// </summary>
-            public DataSet SelSrvErr(int serverid, string p)
-            {
-                try
-                {
-                    string s = p;
-                    string sqlstrSLER = "select * from sur.tb_error where tb_error.serverid=" + serverid + " and tb_error.clientid='" + p + "'";
-                    string sqlstrSLER1 = "select * from sur.tb_error where tb_error.serverid=" + serverid + " and tb_error.clientid='" + p + "' and handled=false";
-                    Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER, myconnSLER);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER, myconnSLER);
-                    myconnSLER.Open();
-                    DataTable dtSLER = new DataTable("所有错误");
-                    DataTable dtSLER1 = new DataTable("未处理错误");
-                    DataSet dsSLER = new DataSet("Errors");
-                    myda.Fill(dtSLER);
-                    dsSLER.Tables.Add(dtSLER);
-                    mycommGtSer.CommandText = sqlstrSLER1;
-                    myda.SelectCommand.CommandText = sqlstrSLER1;
-                    myda.Fill(dtSLER1);
-                    dsSLER.Tables.Add(dtSLER1);
-                    myconnSLER.Close();
-                    myconnSLER.Dispose();
-                    mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器错误详细信息，成功"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + serverid + "服务器错误详细信息，成功", p);
-                    return dsSLER;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-
-            }
-
-            /// <summary>
-            /// 读取某个用户所有未处理的错误
-            /// </summary>
-            public DataSet SelUhdErr(string p)
-            {
-                try
-                {
-                    string s = p;
-                    string sqlstrSLUE = "select * from sur.tb_error where tb_error.clientid='" + p + "' and handled=false";
-                    Npgsql.NpgsqlConnection myconnSLUE = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommSLUE = new Npgsql.NpgsqlCommand(sqlstrSLUE, myconnSLUE);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLUE, myconnSLUE);
-                    myconnSLUE.Open();
-                    DataTable dtSLUE = new DataTable("未处理错误");
-                    DataSet dsSLUE = new DataSet("Errors");
-                    mycommSLUE.CommandText = sqlstrSLUE;
-                    myda.SelectCommand.CommandText = sqlstrSLUE;
-                    myda.Fill(dtSLUE);
-                    dsSLUE.Tables.Add(dtSLUE);
-                    myconnSLUE.Close();
-                    myconnSLUE.Dispose();
-                    mycommSLUE.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询未处理错误详细信息，成功"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询未处理错误详细信息，成功", p);
-                    return dsSLUE;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-
-            }
-
-            /// <summary>
-            /// 读取用户指定网卡的指定条数的最近错误
-            /// </summary>
-            public DataSet SelNtbRctErr(int netboardid, int count, string p)
-            {
-                try
-                {
-                    string s = p;
-                    int ntbid = netboardid;
-                    int ct = count;
-                    string sqlstrSNRE = "select * from tb_error where tb_error.netboardid=" + ntbid + " and tb_error.clientid='" + s + "' and tb_error.serviceid is null order by time desc limit " + ct + "";
-                    Npgsql.NpgsqlConnection myconnSNRE = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSNRE, myconnSNRE);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNRE, myconnSNRE);
-                    myconnSNRE.Open();
-                    DataTable dtSNRE = new DataTable("网卡最近错误");
-                    DataSet dsSNRE = new DataSet("NtbRctErrors");
-                    mycommGtSer.CommandText = sqlstrSNRE;
-                    myda.SelectCommand.CommandText = sqlstrSNRE;
-                    myda.Fill(dtSNRE);
-                    dsSNRE.Tables.Add(dtSNRE);
-                    myconnSNRE.Close();
-                    myconnSNRE.Dispose();
-                    mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡未处理最近" + count + "条错误详细信息，成功"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询" + netboardid + "号网卡未处理最近" + count + "条错误详细信息，成功", p);
-                    return dsSNRE;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-
-            /// <summary>
-            /// 读取数据库中所有员工信息
-            /// </summary>
-            public DataSet SelAllEmp()
-            {
-                try
-                {
-                    string sqlstrSEE = "select * from tb_client;";
-                    Npgsql.NpgsqlConnection myconnSEE = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSEE, myconnSEE);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSEE, myconnSEE);
-                    myconnSEE.Open();
-                    DataTable dtSEE = new DataTable("员工");
-                    DataSet dsSEE = new DataSet("emlpoyee");
-                    mycommGtSer.CommandText = sqlstrSEE;
-                    myda.SelectCommand.CommandText = sqlstrSEE;
-                    myda.Fill(dtSEE);
-                    dsSEE.Tables.Add(dtSEE);
-                    myconnSEE.Close();
-                    myconnSEE.Dispose();
-                    mycommGtSer.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员选择所有员工信息，成功"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员选择所有员工信息，成功", "admin");
-                    return dsSEE;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-            /// <summary>
-            /// 新增一个服务器
-            /// </summary>
-            public int InsSvr(string clientid, string servername, DateTime commyear, string empolyid, string description)// 返回服务器号
-            {
-                string cid = clientid;
-                string svrname = servername;
-                string cyear = commyear.ToString("yyyy-MM-dd");
-                string eid = empolyid;
-                string InsSvr = "INSERT INTO sur.tb_server(clientid,name,commissionyear,emergency,description)VALUES(@clientid,@name,@commissionyear,@emergency,@description) ;SELECT distinct lastval() from tb_server ; ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsSvr, myconnping);
-
-                myconnping.Open();
-                try
-                {
-                    mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = cid;
-                    mycommping.Parameters.Add("@name", NpgsqlTypes.NpgsqlDbType.Char, 40).Value = svrname;
-                    mycommping.Parameters.Add("@commissionyear", NpgsqlTypes.NpgsqlDbType.Date).Value = cyear;
-                    mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
-                    mycommping.Parameters.Add("@description", NpgsqlTypes.NpgsqlDbType.Varchar, 200).Value = description;
-                    Npgsql.NpgsqlDataReader R = mycommping.ExecuteReader();
-                    int i = 0;
-                    while (R.Read())
+                    public DataSet SelHdldErr(string clientid)
                     {
-                        i = Convert.ToInt16(R[0]);
+                        string cid = clientid;
+                        if (cid == "admin")
+                        {
+                            try
+                            {
+                                string sqlstrSHE = "select * from sur.tb_error where handled=true";
+                                Npgsql.NpgsqlConnection myconnSHE = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommSHE = new Npgsql.NpgsqlCommand(sqlstrSHE, myconnSHE);
+                                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSHE, myconnSHE);
+                                myconnSHE.Open();
+                                DataTable dtSHE = new DataTable("未处理错误");
+                                DataSet dsSHE = new DataSet("Errors");
+                                mycommSHE.CommandText = sqlstrSHE;
+                                myda.SelectCommand.CommandText = sqlstrSHE;
+                                myda.Fill(dtSHE);
+                                dsSHE.Tables.Add(dtSHE);
+                                myconnSHE.Close();
+                                myconnSHE.Dispose();
+                                mycommSHE.Dispose();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，成功"), point);
+                                return dsSHE;
+                            }
+
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，数据库连接失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                string sqlstrSHE = "select * from sur.tb_error where tb_error.clientid='" + cid + "' and handled=true";
+                                Npgsql.NpgsqlConnection myconnSHE = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommSHE = new Npgsql.NpgsqlCommand(sqlstrSHE, myconnSHE);
+                                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSHE, myconnSHE);
+                                myconnSHE.Open();
+                                DataTable dtSHE = new DataTable("已处理错误");
+                                DataSet dsSHE = new DataSet("Errors");
+                                mycommSHE.CommandText = sqlstrSHE;
+                                myda.SelectCommand.CommandText = sqlstrSHE;
+                                myda.Fill(dtSHE);
+                                dsSHE.Tables.Add(dtSHE);
+                                myconnSHE.Close();
+                                myconnSHE.Dispose();
+                                mycommSHE.Dispose();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，成功"), point);
+                                return dsSHE;
+                            }
+
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，数据库连接失败"), point);
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
                     }
-                    R.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，成功"), point);
-                    log.logDB(cid, "新增" + svrname + "服务器", true);
-                    myconnping.Close();
-                    return i;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + svrname + "服务器，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-            /// <summary>
-            /// 新增一个雇员
-            /// </summary>
-            public int InsEmp(string employid, string name, DateTime birth, string sex, string tel, string email, bool emergency, string clientid)
-            {
-                string eid = employid;
-                string nme = name;
-                string ag = birth.ToString("yyyy-MM-dd");
-                string gender = sex;
-                string at = email;
-                string InsEmp = "INSERT INTO sur.tb_client(employid,name,birth,tel,email,sex,emergency)VALUES(@employid,@name,@birth,@tel,@email,@sex,@emergency); ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsEmp, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
-                    mycommping.Parameters.Add("@name", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = nme;
-                    mycommping.Parameters.Add("@birth", NpgsqlTypes.NpgsqlDbType.Smallint).Value = ag;
-                    mycommping.Parameters.Add("@tel", NpgsqlTypes.NpgsqlDbType.Char, 15).Value = tel;
-                    mycommping.Parameters.Add("@email", NpgsqlTypes.NpgsqlDbType.Char, 30).Value = at;
-                    mycommping.Parameters.Add("@sex", NpgsqlTypes.NpgsqlDbType.Char, 5).Value = gender;
-                    mycommping.Parameters.Add("@emergency", NpgsqlTypes.NpgsqlDbType.Boolean).Value = emergency;
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户新增" + nme + "雇员，成功"), point);         
-                    log.logDB(clientid, "新增" + nme + "雇员", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户新增" + nme + "雇员，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
 
-                }
-            }
-
-            /// <summary>
-            /// 读取网卡最近的指定条数据
-            /// </summary>
-            public DataSet SelNtbRctData(int netboardid, int count, string p)
-            {
-                try
-                {
-                    string s = p;
-                    int ntbid = netboardid;
-                    int ct = count;
-                    string sqlstrSNRD = "select * from tb_ntbdata where tb_ntbdata.netboardid=" + ntbid + " order by time desc limit " + ct + "";
-                    Npgsql.NpgsqlConnection myconnSNRD = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommSNRD = new Npgsql.NpgsqlCommand(sqlstrSNRD, myconnSNRD);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNRD, myconnSNRD);
-                    myconnSNRD.Open();
-                    DataTable dtSNRD = new DataTable("网卡最近数据");
-                    DataSet dsSNRD = new DataSet("NtbRctData");
-                    mycommSNRD.CommandText = sqlstrSNRD;
-                    myda.SelectCommand.CommandText = sqlstrSNRD;
-                    myda.Fill(dtSNRD);
-                    dsSNRD.Tables.Add(dtSNRD);
-                    myconnSNRD.Close();
-                    myconnSNRD.Dispose();
-                    mycommSNRD.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，成功"), point);                   
-                    return dsSNRD;
-                }
-
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近" + count + "条数据详细信息，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-
-
-            /// <summary>
-            /// 在服务器上新增一块网卡(如果serverid不属于该client，会返回1)
-            /// </summary>
-            //DONE：确认Server属性中clientid和参数值相等
-            public int InsNtbd(int serverid, string url, string clientid)
-            {
-                string cid = clientid;
-                int sid = serverid;
-                string ip = url;
-                #region 从数据库中读取数据
-                string dat = "select clientid from tb_server where tb_server.serverid=" + sid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                string cidverify = dt.Rows[0][0].ToString().Trim();
-
-                #endregion
-                if (cidverify == cid.Trim())
-                {
-                    IPAddress Adress = IPAddress.Parse(url.Trim());
-                    string InsNtbd = "INSERT INTO sur.tb_netboard(serverid,url)VALUES(@serverid,@url); ";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
-                    myconnping.Open();
-                    try
+                    public DataSet SelNtbsSvc(int netboardid, string clientid)
                     {
-                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = sid;
-                        mycommping.Parameters.Add("@url", NpgsqlTypes.NpgsqlDbType.Inet).Value = Adress;
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);                      
-                        log.logDB(cid, "在" + sid + "号服务器上新增网卡", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                    }
-                }
-                else if (cid == "admin")
-                {
-                    IPAddress Adress = IPAddress.Parse(url.Trim());
-                    string InsNtbd = "INSERT INTO sur.tb_netboard(serverid,url)VALUES(@serverid,@url); ";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = sid;
-                        mycommping.Parameters.Add("@url", NpgsqlTypes.NpgsqlDbType.Inet).Value = Adress;
+                        int nid = netboardid;
+                        string cid = clientid;
 
+                        try
+                        {
+                            string sqlstrSNS = "select * from sur.tb_service where tb_service.netboardid=" + netboardid + "";
+                            Npgsql.NpgsqlConnection myconnSNS = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommSNS = new Npgsql.NpgsqlCommand(sqlstrSNS, myconnSNS);
+                            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNS, myconnSNS);
+                            myconnSNS.Open();
+                            DataTable dtSNS = new DataTable("网卡上服务");
+                            DataSet dsSNS = new DataSet("Errors");
+                            mycommSNS.CommandText = sqlstrSNS;
+                            myda.SelectCommand.CommandText = sqlstrSNS;
+                            myda.Fill(dtSNS);
+                            dsSNS.Tables.Add(dtSNS);
+                            myconnSNS.Close();
+                            myconnSNS.Dispose();
+                            mycommSNS.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询" + nid + "号网卡上服务详细信息，成功"), point);
+                            return dsSNS;
+                        }
 
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，成功"), point);
-                        log.logDB(cid, "在" + sid + "号服务器上新增网卡", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户在" + sid + "号服务器上新增网卡，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                    }
-                }
-                else return 1;
-            }
-            /// <summary>
-            /// 在网卡上新增一个服务(如果serverid不属于该client或网卡不属于该服务器，会返回1)
-            /// </summary>
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询" + nid + "号网卡上服务详细信息，数据库连接失败"), point);
+                            var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
 
-            public int InsSvc(int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description)
-            {
-                int srvid = serverid;
-                string srvtype = servicetype;
-                string srvname = servicename;
-                int nid = netboardid;
-                int pt = port;
-                string s = clientid;
-                #region 从数据库中读取数据
-                string dat = "select tb_server.serverid,clientid from tb_server inner join tb_netboard on tb_server.serverid=tb_netboard.serverid where tb_netboard.netboardid=" + netboardid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                int sidverify = Convert.ToInt16(dt.Rows[0][0]);
-                string cidverify = dt.Rows[0][1].ToString().Trim();
-                #endregion
-                if (cidverify == s.Trim() && sidverify == srvid)
-                {
-
-                    string InsNtbd = "INSERT INTO sur.tb_service(serverid,servicetype,servicename,netboardid,port,description)VALUES(@serverid,@servicetype,@servicename,@netboardid,@port,@description); ";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = srvid;
-                        mycommping.Parameters.Add("@servicetype", NpgsqlTypes.NpgsqlDbType.Char, 15).Value = srvtype;
-                        mycommping.Parameters.Add("@servicename", NpgsqlTypes.NpgsqlDbType.Char, 20).Value = srvname;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Integer).Value = nid;
-                        mycommping.Parameters.Add("@port", NpgsqlTypes.NpgsqlDbType.Integer).Value = pt;
-                        mycommping.Parameters.Add("@description", NpgsqlTypes.NpgsqlDbType.Varchar, 200).Value = description;
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，成功"), point);
-                        log.logDB(s, "在" + srvid + "号服务器" + nid + "号网卡上新增服务", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var error = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else if (s == "admin" && sidverify == srvid)
-                {
-                    string InsNtbd = "INSERT INTO sur.tb_service(serverid,servicetype,servicename,netboardid,port,description)VALUES(@serverid,@servicetype,@servicename,@netboardid,@port,@description); ";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.Parameters.Add("@serverid", NpgsqlTypes.NpgsqlDbType.Integer).Value = srvid;
-                        mycommping.Parameters.Add("@servicetype", NpgsqlTypes.NpgsqlDbType.Char, 15).Value = srvtype;
-                        mycommping.Parameters.Add("@servicename", NpgsqlTypes.NpgsqlDbType.Char, 20).Value = srvname;
-                        mycommping.Parameters.Add("@netboardid", NpgsqlTypes.NpgsqlDbType.Integer).Value = nid;
-                        mycommping.Parameters.Add("@port", NpgsqlTypes.NpgsqlDbType.Integer).Value = pt;
-                        mycommping.Parameters.Add("@description", NpgsqlTypes.NpgsqlDbType.Varchar, 200).Value = description;
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，成功"), point);
-                        log.logDB(s, "在" + srvid + "号服务器" + nid + "号网卡上新增服务", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户在" + srvid + "号服务器" + nid + "号网卡上新增服务，数据库写入失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Insert", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
+                        catch (TimeoutException te)//如果数据库未在侦听
+                        {
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                            var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        }
 
                     }
-                }
-                else return 1;
-            }
+                    public DataSet SelAllErr(string clientid)
+                    {
+                        string cid = clientid;
+                        if (cid == "admin")
+                        {
+                            try
+                            {
+                                string sqlstrSLER1 = "select * from sur.tb_error ";
+                                Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER1, myconnSLER);
+                                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER1, myconnSLER);
+                                myconnSLER.Open();
+                                DataTable dtSLER1 = new DataTable("所有错误");
+                                DataSet dsSLER = new DataSet("Errors");
+                                mycommGtSer.CommandText = sqlstrSLER1;
+                                myda.SelectCommand.CommandText = sqlstrSLER1;
+                                myda.Fill(dtSLER1);
+                                dsSLER.Tables.Add(dtSLER1);
+                                myconnSLER.Close();
+                                myconnSLER.Dispose();
+                                mycommGtSer.Dispose();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询所有错误详细信息，成功"), point);
+                                return dsSLER;
+                            }
 
-            /// <summary>
-            /// 读取网卡最近一段时间内的数据(starttime是相对较小日期时间)
-            /// </summary>
-            public DataSet SelNtbBwnData(int netboardid, string p, DateTime starttime, DateTime endtime)
-            {
-                string s = p;
-                int ntbid = netboardid;
-                string stime = starttime.ToString();
-                string etime = endtime.ToString();
-                try
-                {
-                    string sqlstrSNBD = "select * from tb_ntbdata where tb_ntbdata.netboardid=" + netboardid + " and time >= '" + stime + "'::timestamp and time <= '" + etime + "'::timestamp order by time desc";
-                    Npgsql.NpgsqlConnection myconnSNBD = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommSNBD = new Npgsql.NpgsqlCommand(sqlstrSNBD, myconnSNBD);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNBD, myconnSNBD);
-                    myconnSNBD.Open();
-                    DataTable dtSNBD = new DataTable("网卡时间段数据");
-                    DataSet dsSNBD = new DataSet("NtbBwnData");
-                    mycommSNBD.CommandText = sqlstrSNBD;
-                    myda.SelectCommand.CommandText = sqlstrSNBD;
-                    myda.Fill(dtSNBD);
-                    dsSNBD.Tables.Add(dtSNBD);
-                    myconnSNBD.Close();
-                    myconnSNBD.Dispose();
-                    mycommSNBD.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从" + stime + "到" + etime + "时间段数据详细信息，成功"), point);
-                    return dsSNBD;
-                }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询所有错误详细信息，数据库读取失败"), point);
+                                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
 
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从" + stime + "到" + etime + "时间段数据详细信息，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                string sqlstrSLER1 = "select * from sur.tb_error where tb_error.clientid='" + cid + "'";
+                                Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
+                                Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER1, myconnSLER);
+                                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER1, myconnSLER);
+                                myconnSLER.Open();
+                                DataTable dtSLER1 = new DataTable("所有错误");
+                                DataSet dsSLER = new DataSet("Errors");
+                                mycommGtSer.CommandText = sqlstrSLER1;
+                                myda.SelectCommand.CommandText = sqlstrSLER1;
+                                myda.Fill(dtSLER1);
+                                dsSLER.Tables.Add(dtSLER1);
+                                myconnSLER.Close();
+                                myconnSLER.Dispose();
+                                mycommGtSer.Dispose();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询所有错误详细信息，成功"), point);
+                                return dsSLER;
+                            }
 
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-            /// <summary>
-            /// 处理错误
-            /// </summary>
-            public int HandleError(int errorid, string description, string p)
-            {
-                int eid = errorid;
-                string clientid = p;
-                string HE = "UPDATE tb_error SET  handled=true, description='" + description + "' WHERE errorid=" + eid + " and clientid='" + clientid + "'";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(HE, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户处理" + eid + "号错误，成功"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户处理" + eid + "号错误，成功", clientid);
-                    log.logDB(clientid, "处理" + eid + "号错误", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户处理" + eid + "号错误，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-            /// <summary>
-            /// 用于测试网卡IP地址的正确与否，不写入数据。正常返回0，失败返回1。
-            /// </summary>
-            public int PingIP(string address, ref long RtT, string clientid)
-            {
-                string url = address;
-                string p = clientid;
-                Ping pingSender = new Ping();
-                PingOptions options = new PingOptions();
-                // 使用默认TTL值128,
-                // but change the fragmentation behavior.
-                options.DontFragment = true;
-                // Create a buffer of 32 bytes of data to be transmitted.
-                string data = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-                byte[] buffer = Encoding.ASCII.GetBytes(data);
-                int timeout = 120;
-                IPAddress Address = IPAddress.Parse(url);
-                PingReply reply = pingSender.Send(Address, timeout, buffer, options);
-                if (reply.Status == IPStatus.Success)
-                {
-                    RtT = reply.RoundtripTime;
-                    return 0;
-                }
-                else
-                {
-                    RtT = 12000;
-                    return 1;
-                }
-            }
-            /// <summary>
-            /// 更新服务器信息
-            /// </summary>
-            public int UpdSvr(int serverid, string clientid, string servername, DateTime commyear, string emergency, string description)
-            {
-                int sid = serverid;
-                string cid = clientid;
-                string svrname = servername;
-                string cyear = commyear.ToString("yyyy-MM-dd");
-                string eid = emergency;
-                string UpdSvr = "UPDATE sur.tb_server SET clientid='" + cid + "', name='" + svrname + "', emergency='" + eid + "', commissionyear='" + cyear + "',description='" + description + "' WHERE serverid=" + sid + "; ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvr, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + svrname + "服务器信息，成功"), point);
-                    log.logDB(cid, "更新" + svrname + "服务器信息", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + svrname + "服务器信息，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户更新" + svrname + "服务器信息，数据库写入失败", cid);
-                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-            /// <summary>
-            /// 更新网卡信息
-            /// </summary>
-            public int UpdNtbd(int netboardid, string url, string clientid)
-            {
-                string cid = clientid;
-                int nid = netboardid;
-                IPAddress Adress = IPAddress.Parse(url.Trim());
-                string UpdNtbd = "UPDATE tb_netboard SET url='" + Adress + "' WHERE netboardid=" + nid + "; ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdNtbd, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + nid + "号网卡信息，成功"), point);
-                    log.logDB(cid, "更新" + nid + "号网卡信息", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更新" + nid + "号网卡信息，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
-            /// <summary>
-            /// 更新服务信息
-            /// </summary>
-            public int UpdSvc(int serviceid, int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description)
-            {
-                int svcid = serviceid;
-                int srvid = serverid;
-                string srvtype = servicetype;
-                string srvname = servicename;
-                int nid = netboardid;
-                int pt = port;
-                string s = clientid;
-                string UpdSvc = "UPDATE sur.tb_service SET serverid=" + srvid + ", servicetype='" + srvtype + "', servicename='" + srvname + "', netboardid=" + nid + ", port =" + pt + ",description='" + description + "' WHERE serviceid=" + svcid + "; ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvc, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.ExecuteNonQuery();
-                    myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户更新" + svcid + "号服务数据，成功"), point);
-                    log.logDB(s, "更新" + svcid + "号服务数据", true);                   
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + s + "用户更新" + svcid + "号服务数据，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询所有错误详细信息，数据库读取失败"), point);
+                                var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+                            }
+                            catch (TimeoutException te)//如果数据库未在侦听
+                            {
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                                var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                            }
+                        }
+                    }
 
-            public int UpdEmp(string empolyid, string name, string sex, DateTime birth, string tel, string email, bool emergency, string clientid)
-            {
-                string eid = empolyid;
-                string nme = name;
-                string gender = sex;
-                string ag = birth.ToString("yyyy-MM-dd");
-                string number = tel;
-                string em = email;
-                bool emer = emergency;
-                if (eid == "admin")
-                {
-                    string UpdEmp = "UPDATE tb_client SET employid ='" + eid + "', name ='" + nme + "', sex ='" + gender + "', birth ='" + ag + "', tel ='" + number + "', email ='" + em + "', emergency =null WHERE tb_client.employid='" + empolyid + "' ;";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdEmp, myconnping);
-                    myconnping.Open();
-                    try
+                    public int DelEmp(string empolyid, string clientid)
+                    {
+                        string cid = clientid;
+                        string eid = empolyid;
+                        string DelEmp = "DELETE FROM tb_client WHERE employid='" + eid + "';";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelEmp, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + eid + "员工数据，成功"), point);
+                            log.logDB(cid, "删除" + eid + "员工数据", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + eid + "员工数据，数据库写入失败"), point);
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                    }
+                    public int DelSrv(int serverid, string clientid)
+                    {
+                        int sid = serverid;
+                        string cid = clientid;
+                        #region 从数据库中读取数据
+                        string dat = "select tb_server.clientid from tb_server where tb_server.serverid=" + sid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        string cidverify = dt.Rows[0][0].ToString().Trim();
+                        #endregion
+                        if (cid == "admin")
+                        {
+                            string DelSrv = "DELETE FROM tb_server WHERE serverid=" + sid + ";";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSrv, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，成功"), point);
+                                log.logDB(cid, "删除" + sid + "号服务器数据", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，数据库写入失败"), point);
+                                var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else if (cid == cidverify)
+                        {
+                            string DelSrv = "DELETE FROM tb_server WHERE serverid=" + sid + ";";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSrv, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，成功"), point);
+                                log.logDB(cid, "删除" + sid + "号服务器数据", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，数据库写入失败"), point);
+                                var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else
+                            return 1;
+                    }
+
+                    public int DelNtbd(int netboardid, string clientid)
+                    {
+                        int nid = netboardid;
+                        string cid = clientid;
+                        #region 从数据库中读取数据
+                        string dat = "select tb_server.clientid from tb_server inner join tb_netboard on tb_server.serverid=tb_netboard.serverid where tb_netboard.netboardid=" + nid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        string cidverify = dt.Rows[0][0].ToString().Trim();
+                        #endregion
+                        if (cid == "admin")
+                        {
+                            string DelNtbd = "DELETE FROM tb_netboard WHERE netboardid=" + nid + ";";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelNtbd, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，成功"), point);
+                                log.logDB(cid, "删除" + nid + "号网卡数据", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，数据库写入失败"), point);
+                                var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else if (cid == cidverify)
+                        {
+                            string DelNtbd = "DELETE FROM tb_netboard WHERE netboardid=" + nid + ";";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelNtbd, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，成功"), point);
+                                log.logDB(cid, "删除" + nid + "号网卡数据", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，数据库写入失败"), point);
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else
+                            return 1;
+                    }
+
+                    public int DelSvc(int serviceid, string clientid)
+                    {
+                        int sid = serviceid;
+                        string cid = clientid;
+                        #region 从数据库中读取数据
+                        string dat = "select tb_server.clientid from tb_server inner join tb_service on tb_server.serverid=tb_service.serverid where tb_service.serviceid=" + sid + "";
+                        Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
+                        DataTable dt = new DataTable();
+                        myda.Fill(dt);
+                        string cidverify = dt.Rows[0][0].ToString().Trim();
+                        #endregion
+                        if (cid == "admin")
+                        {
+                            string DelSvc = "DELETE FROM tb_service WHERE serviceid=" + sid + ";";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSvc, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，成功"), point);
+                                log.logDB(cid, "删除" + sid + "号服务数据", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，数据库写入失败"), point);
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else if (cid == cidverify)
+                        {
+                            string DelSvc = "DELETE FROM tb_service WHERE serviceid=" + sid + ";";
+                            Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                            Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSvc, myconnping);
+                            myconnping.Open();
+                            try
+                            {
+
+                                mycommping.ExecuteNonQuery();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，成功"), point);
+                                log.logDB(cid, "删除" + sid + "号服务数据", true);
+                                myconnping.Close();
+                                return 0;
+                            }
+                            catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                            {
+                                myconnping.Close();
+                                server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，数据库写入失败"), point);
+                                SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                                log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                                var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                                throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                            }
+                        }
+                        else
+                            return 1;
+                    }
+
+                    public int Register(string empolyid, string md5, string clientid)
+                    {
+                        string eid = empolyid;
+                        string hash = md5;
+                        string cid = clientid;
+                        string Reg = "INSERT INTO tb_login(clientid, passwd) VALUES(@clientid, @passwd) ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(Reg, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
+                            mycommping.Parameters.Add("@passwd", NpgsqlTypes.NpgsqlDbType.Char, 40).Value = hash;
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + eid + "号员工登录信息，成功"), point);
+                            log.logDB(cid, "新增" + eid + "号员工登录信息", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + eid + "号员工登录信息，数据库写入失败"), point);
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                    }
+                    public int ChgePswd(string empolyid, string md5, string clientid)
+                    {
+                        string eid = empolyid;
+                        string hash = md5;
+                        string cid = clientid;
+                        string ChgePswd = "UPDATE tb_login SET  passwd ='" + hash + "' WHERE tb_login.clientid='" + eid + "'; ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ChgePswd, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更改" + eid + "号员工登录密码，成功"), point);
+                            log.logDB(cid, "更改" + eid + "号员工登录密码", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更改" + eid + "号员工登录密码，数据库写入失败"), point);
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
+                    }
+
+                    public DataSet SelEmerSvr(string employid, string clientid)
                     {
 
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，成功"), point);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，数据库写入失败"), point);
-                        var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else
-                {
-                    string UpdEmp = "UPDATE tb_client SET employid ='" + eid + "', name ='" + nme + "', sex ='" + gender + "', birth ='" + ag + "', tel ='" + number + "', email ='" + em + "', emergency =" + emer + " WHERE tb_client.employid='" + empolyid + "' ;";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdEmp, myconnping);
-                    myconnping.Open();
-                    try
-                    {
 
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，成功"), point);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + clientid + "用户更新" + eid + "号员工数据，数据库写入失败"), point);
-                        var error = new WCFError("Update", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-            }
-
-            public DataSet SelHdldErr(string clientid)
-            {
-                string cid = clientid;
-                if (cid == "admin")
-                {
-                    try
-                    {
-                        string sqlstrSHE = "select * from sur.tb_error where handled=true";
-                        Npgsql.NpgsqlConnection myconnSHE = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommSHE = new Npgsql.NpgsqlCommand(sqlstrSHE, myconnSHE);
-                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSHE, myconnSHE);
-                        myconnSHE.Open();
-                        DataTable dtSHE = new DataTable("未处理错误");
-                        DataSet dsSHE = new DataSet("Errors");
-                        mycommSHE.CommandText = sqlstrSHE;
-                        myda.SelectCommand.CommandText = sqlstrSHE;
-                        myda.Fill(dtSHE);
-                        dsSHE.Tables.Add(dtSHE);
-                        myconnSHE.Close();
-                        myconnSHE.Dispose();
-                        mycommSHE.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，成功"), point);
-                        return dsSHE;
+                        string eid = employid;
+                        string cid = clientid;
+                        string SES = "SELECT * FROM tb_server WHERE tb_server.emergency='" + eid + "'; ";
+                        Npgsql.NpgsqlConnection myconnSES = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommSES = new Npgsql.NpgsqlCommand(SES, myconnSES);
+                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(SES, myconnSES);
+                        try
+                        {
+                            myconnSES.Open();
+                            DataTable dtSES = new DataTable("所属服务器");
+                            DataSet dsSES = new DataSet("Servers");
+                            mycommSES.CommandText = SES;
+                            myda.SelectCommand.CommandText = SES;
+                            myda.Fill(dtSES);
+                            dsSES.Tables.Add(dtSES);
+                            myconnSES.Close();
+                            myconnSES.Dispose();
+                            mycommSES.Dispose();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询紧急联系人为" + eid + "号员工服务器，成功"), point);
+                            myconnSES.Close();
+                            return dsSES;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnSES.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询紧急联系人为" + eid + "号员工服务器，数据库写入失败"), point);
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
                     }
 
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                    public int UpdSvrEmerNull(int serverid, string clientid)
                     {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，数据库连接失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                    }
-                }
-                else
-                {
-                    try
-                    {
-                        string sqlstrSHE = "select * from sur.tb_error where tb_error.clientid='" + cid + "' and handled=true";
-                        Npgsql.NpgsqlConnection myconnSHE = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommSHE = new Npgsql.NpgsqlCommand(sqlstrSHE, myconnSHE);
-                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSHE, myconnSHE);
-                        myconnSHE.Open();
-                        DataTable dtSHE = new DataTable("已处理错误");
-                        DataSet dsSHE = new DataSet("Errors");
-                        mycommSHE.CommandText = sqlstrSHE;
-                        myda.SelectCommand.CommandText = sqlstrSHE;
-                        myda.Fill(dtSHE);
-                        dsSHE.Tables.Add(dtSHE);
-                        myconnSHE.Close();
-                        myconnSHE.Dispose();
-                        mycommSHE.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，成功"), point);
-                        return dsSHE;
+                        int sid = serverid;
+                        string cid = clientid;
+                        string UpdSvrEmerNull = "UPDATE tb_server SET  emergency=null WHERE tb_server.serverid=" + sid + "; ";
+                        Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
+                        Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvrEmerNull, myconnping);
+                        myconnping.Open();
+                        try
+                        {
+                            mycommping.ExecuteNonQuery();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户重置" + sid + "号服务器紧急联系人，成功"), point);
+                            log.logDB(cid, "重置" + sid + "号服务器紧急联系人", true);
+                            myconnping.Close();
+                            return 0;
+                        }
+                        catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                        {
+                            myconnping.Close();
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户重置" + sid + "号服务器紧急联系人，数据库写入失败"), point);
+                            SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                            log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                            var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                            throw new FaultException<WCFError>(error, error.Message);//抛出错误
+                        }
                     }
 
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                    public async void SendMailAsync(string adress, string cc, string message)
                     {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询已处理错误详细信息，数据库连接失败"), point);
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                    }
-                }
-            }
-
-            public DataSet SelNtbsSvc(int netboardid, string clientid)
-            {
-                int nid = netboardid;
-                string cid = clientid;
-
-                try
-                {
-                    string sqlstrSNS = "select * from sur.tb_service where tb_service.netboardid=" + netboardid + "";
-                    Npgsql.NpgsqlConnection myconnSNS = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommSNS = new Npgsql.NpgsqlCommand(sqlstrSNS, myconnSNS);
-                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNS, myconnSNS);
-                    myconnSNS.Open();
-                    DataTable dtSNS = new DataTable("网卡上服务");
-                    DataSet dsSNS = new DataSet("Errors");
-                    mycommSNS.CommandText = sqlstrSNS;
-                    myda.SelectCommand.CommandText = sqlstrSNS;
-                    myda.Fill(dtSNS);
-                    dsSNS.Tables.Add(dtSNS);
-                    myconnSNS.Close();
-                    myconnSNS.Dispose();
-                    mycommSNS.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询" + nid + "号网卡上服务详细信息，成功"), point);
-                    return dsSNS;
-                }
-
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询" + nid + "号网卡上服务详细信息，数据库连接失败"), point);
-                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-
-                }
-                catch (TimeoutException te)//如果数据库未在侦听
-                {
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                }
-
-            }
-            public DataSet SelAllErr(string clientid)
-            {
-                string cid = clientid;
-                if (cid == "admin")
-                {
-                    try
-                    {
-                        string sqlstrSLER1 = "select * from sur.tb_error ";
-                        Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER1, myconnSLER);
-                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER1, myconnSLER);
-                        myconnSLER.Open();
-                        DataTable dtSLER1 = new DataTable("所有错误");
-                        DataSet dsSLER = new DataSet("Errors");
-                        mycommGtSer.CommandText = sqlstrSLER1;
-                        myda.SelectCommand.CommandText = sqlstrSLER1;
-                        myda.Fill(dtSLER1);
-                        dsSLER.Tables.Add(dtSLER1);
-                        myconnSLER.Close();
-                        myconnSLER.Dispose();
-                        mycommGtSer.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询所有错误详细信息，成功"), point);
-                        return dsSLER;
-                    }
-
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    管理员用户查询所有错误详细信息，数据库读取失败"), point);
-                        var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                        MailAddress MailFrom = new MailAddress(Log.MailFrom);
+                        MailAddress MailTo = new MailAddress(adress);
+                        MailMessage myEmail = new MailMessage(MailFrom, MailTo);
+                        string host = Log.host;
+                        string username = Log.username;
+                        string password = Log.password;
+                        int port = Log.port;
+                        if (cc != null)
+                        {
+                            MailAddress MailCc = new MailAddress(cc);
+                            myEmail.CC.Add(MailCc);
+                        }
+                        myEmail.Subject = "" + DateTime.Now.Date + "+监管系统后台错误";
+                        myEmail.Body = message;
+                        SmtpClient sc = new SmtpClient(host);
+                        sc.UseDefaultCredentials = false;
+                        sc.EnableSsl = Log.ssl;
+                        sc.Port = port;
+                        sc.Credentials = new NetworkCredential(username, password);
+                        try
+                        {
+                            await sc.SendMailAsync(myEmail);
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    异常邮件发送成功！"), point);
+                        }
+                        catch (Exception e1)
+                        {
+                            server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    异常邮件发送出现异常！"), point);
+                        }
                     }
                 }
-                else
-                {
-                    try
-                    {
-                        string sqlstrSLER1 = "select * from sur.tb_error where tb_error.clientid='" + cid + "'";
-                        Npgsql.NpgsqlConnection myconnSLER = new Npgsql.NpgsqlConnection(connstr);
-                        Npgsql.NpgsqlCommand mycommGtSer = new Npgsql.NpgsqlCommand(sqlstrSLER1, myconnSLER);
-                        Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSLER1, myconnSLER);
-                        myconnSLER.Open();
-                        DataTable dtSLER1 = new DataTable("所有错误");
-                        DataSet dsSLER = new DataSet("Errors");
-                        mycommGtSer.CommandText = sqlstrSLER1;
-                        myda.SelectCommand.CommandText = sqlstrSLER1;
-                        myda.Fill(dtSLER1);
-                        dsSLER.Tables.Add(dtSLER1);
-                        myconnSLER.Close();
-                        myconnSLER.Dispose();
-                        mycommGtSer.Dispose();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询所有错误详细信息，成功"), point);
-                        return dsSLER;
-                    }
-
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询所有错误详细信息，数据库读取失败"), point);
-                        var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
-                    }
-                    catch (TimeoutException te)//如果数据库未在侦听
-                    {
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
-                        var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
-                    }
-                }
-            }
-
-            public int DelEmp(string empolyid, string clientid)
-            {
-                string cid = clientid;
-                string eid = empolyid;
-                string DelEmp = "DELETE FROM tb_client WHERE employid='" + eid + "';";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelEmp, myconnping);
-                myconnping.Open();
-                try
-                {
-
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + eid + "员工数据，成功"), point);
-                    log.logDB(cid, "删除" + eid + "员工数据", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");       
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + eid + "员工数据，数据库写入失败"), point);
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-            }
-            public int DelSrv(int serverid, string clientid)
-            {
-                int sid = serverid;
-                string cid = clientid;
-                #region 从数据库中读取数据
-                string dat = "select tb_server.clientid from tb_server where tb_server.serverid=" + sid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                string cidverify = dt.Rows[0][0].ToString().Trim();
-                #endregion
-                if (cid == "admin")
-                {
-                    string DelSrv = "DELETE FROM tb_server WHERE serverid=" + sid + ";";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSrv, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，成功"), point);
-                        log.logDB(cid, "删除" + sid + "号服务器数据", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，数据库写入失败"), point);
-                        var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else if (cid == cidverify)
-                {
-                    string DelSrv = "DELETE FROM tb_server WHERE serverid=" + sid + ";";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSrv, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，成功"), point);
-                        log.logDB(cid, "删除" + sid + "号服务器数据", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务器数据，数据库写入失败"), point);
-                        var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else
-                    return 1;
-            }
-
-            public int DelNtbd(int netboardid, string clientid)
-            {
-                int nid = netboardid;
-                string cid = clientid;
-                #region 从数据库中读取数据
-                string dat = "select tb_server.clientid from tb_server inner join tb_netboard on tb_server.serverid=tb_netboard.serverid where tb_netboard.netboardid=" + nid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                string cidverify = dt.Rows[0][0].ToString().Trim();
-                #endregion
-                if (cid == "admin")
-                {
-                    string DelNtbd = "DELETE FROM tb_netboard WHERE netboardid=" + nid + ";";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelNtbd, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，成功"), point);
-                        log.logDB(cid, "删除" + nid + "号网卡数据", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，数据库写入失败"), point);
-                        var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else if (cid == cidverify)
-                {
-                    string DelNtbd = "DELETE FROM tb_netboard WHERE netboardid=" + nid + ";";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelNtbd, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，成功"), point);
-                        log.logDB(cid, "删除" + nid + "号网卡数据", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + nid + "号网卡数据，数据库写入失败"), point);
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else
-                    return 1;
-            }
-
-            public int DelSvc(int serviceid, string clientid)
-            {
-                int sid = serviceid;
-                string cid = clientid;
-                #region 从数据库中读取数据
-                string dat = "select tb_server.clientid from tb_server inner join tb_service on tb_server.serverid=tb_service.serverid where tb_service.serviceid=" + sid + "";
-                Npgsql.NpgsqlConnection myconndat = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommdat = new Npgsql.NpgsqlCommand(dat, myconndat);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(dat, myconndat);
-                DataTable dt = new DataTable();
-                myda.Fill(dt);
-                string cidverify = dt.Rows[0][0].ToString().Trim();
-                #endregion
-                if (cid == "admin")
-                {
-                    string DelSvc = "DELETE FROM tb_service WHERE serviceid=" + sid + ";";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSvc, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，成功"), point);
-                        log.logDB(cid, "删除" + sid + "号服务数据", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，数据库写入失败"), point);
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else if (cid == cidverify)
-                {
-                    string DelSvc = "DELETE FROM tb_service WHERE serviceid=" + sid + ";";
-                    Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                    Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(DelSvc, myconnping);
-                    myconnping.Open();
-                    try
-                    {
-
-                        mycommping.ExecuteNonQuery();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，成功"), point);
-                        log.logDB(cid, "删除" + sid + "号服务数据", true);
-                        myconnping.Close();
-                        return 0;
-                    }
-                    catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                    {
-                        myconnping.Close();
-                        server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户删除" + sid + "号服务数据，数据库写入失败"), point);
-                        SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                        log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                        var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                        throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                    }
-                }
-                else
-                    return 1;
-            }
-
-            public int Register(string empolyid, string md5, string clientid)
-            {
-                string eid = empolyid;
-                string hash = md5;
-                string cid = clientid;
-                string Reg = "INSERT INTO tb_login(clientid, passwd) VALUES(@clientid, @passwd) ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(Reg, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = eid;
-                    mycommping.Parameters.Add("@passwd", NpgsqlTypes.NpgsqlDbType.Char, 40).Value = hash;
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + eid + "号员工登录信息，成功"), point);
-                    log.logDB(cid, "新增" + eid + "号员工登录信息", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户新增" + eid + "号员工登录信息，数据库写入失败"), point);
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Insert", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-            }
-            public int ChgePswd(string empolyid, string md5, string clientid)
-            {
-                string eid = empolyid;
-                string hash = md5;
-                string cid = clientid;
-                string ChgePswd = "UPDATE tb_login SET  passwd ='" + hash + "' WHERE tb_login.clientid='" + eid + "'; ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(ChgePswd, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更改" + eid + "号员工登录密码，成功"), point);
-                    log.logDB(cid, "更改" + eid + "号员工登录密码", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户更改" + eid + "号员工登录密码，数据库写入失败"), point);
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-            }
-
-            public DataSet SelEmerSvr(string employid, string clientid)
-            {
-
-
-                string eid = employid;
-                string cid = clientid;
-                string SES = "SELECT * FROM tb_server WHERE tb_server.emergency='" + eid + "'; ";
-                Npgsql.NpgsqlConnection myconnSES = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommSES = new Npgsql.NpgsqlCommand(SES, myconnSES);
-                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(SES, myconnSES);
-                try
-                {
-                    myconnSES.Open();
-                    DataTable dtSES = new DataTable("所属服务器");
-                    DataSet dsSES = new DataSet("Servers");
-                    mycommSES.CommandText = SES;
-                    myda.SelectCommand.CommandText = SES;
-                    myda.Fill(dtSES);
-                    dsSES.Tables.Add(dtSES);
-                    myconnSES.Close();
-                    myconnSES.Dispose();
-                    mycommSES.Dispose();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询紧急联系人为" + eid + "号员工服务器，成功"), point);
-                    myconnSES.Close();
-                    return dsSES;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnSES.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户查询紧急联系人为" + eid + "号员工服务器，数据库写入失败"), point);
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-            }
-
-            public int UpdSvrEmerNull(int serverid, string clientid)
-            {
-                int sid = serverid;
-                string cid = clientid;
-                string UpdSvrEmerNull = "UPDATE tb_server SET  emergency=null WHERE tb_server.serverid=" + sid + "; ";
-                Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
-                Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(UpdSvrEmerNull, myconnping);
-                myconnping.Open();
-                try
-                {
-                    mycommping.ExecuteNonQuery();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户重置" + sid + "号服务器紧急联系人，成功"), point);
-                    log.logDB(cid, "重置" + sid + "号服务器紧急联系人", true);
-                    myconnping.Close();
-                    return 0;
-                }
-                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
-                {
-                    myconnping.Close();
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + cid + "用户重置" + sid + "号服务器紧急联系人，数据库写入失败"), point);
-                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
-                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
-                    var error = new WCFError("Delete", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
-                    throw new FaultException<WCFError>(error, error.Message);//抛出错误
-                }
-            }
-
-            public async void SendMailAsync(string adress, string cc, string message)
-            {
-                MailAddress MailFrom = new MailAddress(Log.MailFrom);
-                MailAddress MailTo = new MailAddress(adress);
-                MailMessage myEmail = new MailMessage(MailFrom, MailTo);
-                string host = Log.host;
-                string username = Log.username;
-                string password = Log.password;
-                int port = Log.port;
-                if (cc != null)
-                {
-                    MailAddress MailCc = new MailAddress(cc);
-                    myEmail.CC.Add(MailCc);
-                }
-                myEmail.Subject = "" + DateTime.Now.Date + "+监管系统后台错误";
-                myEmail.Body = message;
-                SmtpClient sc = new SmtpClient(host);
-                sc.UseDefaultCredentials = false;
-                sc.EnableSsl = Log.ssl;
-                sc.Port = port;
-                sc.Credentials = new NetworkCredential(username, password);
-                try
-                {
-                    await sc.SendMailAsync(myEmail);
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    异常邮件发送成功！"), point);
-                }
-                catch (Exception e1)
-                {
-                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    异常邮件发送出现异常！"), point);
-                }
-            }
-        }
 
         [ServiceContract(Namespace = "Horace")]
 
-        public interface Icl
-        {
-
-            [OperationContract]
-
-            int Login(string p, string pswd);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
-            DataSet Intialize(string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
-            int PingService(int serviceid, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
-            int PingNetbd(int netboardid, ref long RtT, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int ErrNtbd(int netboardid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int ErrSvc(int serviceid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
-            DataSet SvrDetl(int serverid, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet ClientDetail(string empolyid, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelSrvErr(int serverid, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelUhdErr(string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelNtbRctErr(int netboardid, int count, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelAllEmp();
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int InsSvr(string clientid, string servername, DateTime commyear, string empolyid, string description);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int InsEmp(string employid, string name, DateTime birth, string sex, string tel, string email, bool emergency, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelNtbRctData(int netboardid, int count, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int InsNtbd(int serverid, string url, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int InsSvc(int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelNtbBwnData(int netboardid, string p, DateTime starttime, DateTime endtime);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int HandleError(int errorid, string description, string p);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int PingIP(string address, ref long RtT, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int UpdSvr(int serverid, string clientid, string servername, DateTime commyear, string emergency, string description);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int UpdNtbd(int netboardid, string url, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int UpdSvc(int serviceid, int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int UpdEmp(string empolyid, string name, string sex, DateTime birth, string tel, string email, bool emergency, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelHdldErr(string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelNtbsSvc(int netboardid, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelAllErr(string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int DelEmp(string empolyid, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int DelNtbd(int netboardid, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int DelSvc(int serviceid, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int Register(string empolyid, string md5, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int ChgePswd(string empolyid, string md5, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            int UpdSvrEmerNull(int serverid, string clientid);
-            [OperationContract]
-            [FaultContract(typeof(WCFError))]
-            DataSet SelEmerSvr(string employid, string clientid);
-           
-           
-
-        }
-
-        private void 查看日志ToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-
-
-            openFileDialog1.ShowDialog();
-
-        }
-
-        private void openFileDialog1_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
-        {
-            Process.Start(openFileDialog1.FileName);
-        }
-
-
-
-        private void 日志ToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            查看日志ToolStripMenuItem.DropDownItems.Clear();
-            string connstr = "Server=124.161.78.133;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
-            string sqlstrSNBD = "select distinct clientid from tb_login";
-            Npgsql.NpgsqlConnection myconnSNBD = new Npgsql.NpgsqlConnection(connstr);
-            Npgsql.NpgsqlCommand mycommSNBD = new Npgsql.NpgsqlCommand(sqlstrSNBD, myconnSNBD);
-            Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNBD, myconnSNBD);
-            myconnSNBD.Open();
-            DataTable dtSNBD = new DataTable();
-            mycommSNBD.CommandText = sqlstrSNBD;
-            myda.SelectCommand.CommandText = sqlstrSNBD;
-            myda.Fill(dtSNBD);
-            myconnSNBD.Close();
-            myconnSNBD.Dispose();
-            mycommSNBD.Dispose();
-            for (int i = 0; i < dtSNBD.Rows.Count; i++)
+            public interface Icl
             {
-                查看日志ToolStripMenuItem.DropDownItems.Add(dtSNBD.Rows[i][0].ToString());
+
+                [OperationContract]
+
+                int Login(string p, string pswd);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
+                DataSet Intialize(string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
+                int PingService(int serviceid, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
+                Task<int> PingNetbdAsync(int netboardid, ref long RtT, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int ErrNtbd(int netboardid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int ErrSvc(int serviceid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]//制定返回的错误为WCFError型
+                DataSet SvrDetl(int serverid, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet ClientDetail(string empolyid, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelSrvErr(int serverid, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelUhdErr(string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelNtbRctErr(int netboardid, int count, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelAllEmp();
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int InsSvr(string clientid, string servername, DateTime commyear, string empolyid, string description);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int InsEmp(string employid, string name, DateTime birth, string sex, string tel, string email, bool emergency, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelNtbRctData(int netboardid, int count, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int InsNtbd(int serverid, string url, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int InsSvc(int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelNtbBwnData(int netboardid, string p, DateTime starttime, DateTime endtime);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int HandleError(int errorid, string description, string p);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int PingIP(string address, ref long RtT, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int UpdSvr(int serverid, string clientid, string servername, DateTime commyear, string emergency, string description);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int UpdNtbd(int netboardid, string url, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int UpdSvc(int serviceid, int serverid, string servicetype, string servicename, int netboardid, int port, string clientid, string description);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int UpdEmp(string empolyid, string name, string sex, DateTime birth, string tel, string email, bool emergency, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelHdldErr(string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelNtbsSvc(int netboardid, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelAllErr(string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int DelEmp(string empolyid, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int DelNtbd(int netboardid, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int DelSvc(int serviceid, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int Register(string empolyid, string md5, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int ChgePswd(string empolyid, string md5, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                int UpdSvrEmerNull(int serverid, string clientid);
+                [OperationContract]
+                [FaultContract(typeof(WCFError))]
+                DataSet SelEmerSvr(string employid, string clientid);
+
+
+
             }
-        }
 
-
-
-        private void 查看日志ToolStripMenuItem_DropDownItemClicked(object sender, ToolStripItemClickedEventArgs e)
-        {
-            string t = e.ClickedItem.Text;
-            string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM") + "\\" + t + "";
-            if (Directory.Exists(sFilePath))
+            private void 查看日志ToolStripMenuItem_Click(object sender, EventArgs e)
             {
-                openFileDialog1.InitialDirectory = sFilePath;
+
+
                 openFileDialog1.ShowDialog();
+
+            }
+
+            private void openFileDialog1_FileOk(object sender, System.ComponentModel.CancelEventArgs e)
+            {
+                Process.Start(openFileDialog1.FileName);
+            }
+
+
+
+            private void 日志ToolStripMenuItem_Click(object sender, EventArgs e)
+            {
+                查看日志ToolStripMenuItem.DropDownItems.Clear();
+                string connstr = "Server=124.161.78.133;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
+                string sqlstrSNBD = "select distinct clientid from tb_login";
+                Npgsql.NpgsqlConnection myconnSNBD = new Npgsql.NpgsqlConnection(connstr);
+                Npgsql.NpgsqlCommand mycommSNBD = new Npgsql.NpgsqlCommand(sqlstrSNBD, myconnSNBD);
+                Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSNBD, myconnSNBD);
+                myconnSNBD.Open();
+                DataTable dtSNBD = new DataTable();
+                mycommSNBD.CommandText = sqlstrSNBD;
+                myda.SelectCommand.CommandText = sqlstrSNBD;
+                myda.Fill(dtSNBD);
+                myconnSNBD.Close();
+                myconnSNBD.Dispose();
+                mycommSNBD.Dispose();
+                for (int i = 0; i < dtSNBD.Rows.Count; i++)
+                {
+                    查看日志ToolStripMenuItem.DropDownItems.Add(dtSNBD.Rows[i][0].ToString());
+                }
+            }
+
+
+
+            private void 查看日志ToolStripMenuItem_DropDownItemClicked(object sender, ToolStripItemClickedEventArgs e)
+            {
+                string t = e.ClickedItem.Text;
+                string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM") + "\\" + t + "";
+                if (Directory.Exists(sFilePath))
+                {
+                    openFileDialog1.InitialDirectory = sFilePath;
+                    openFileDialog1.ShowDialog();
+                }
+            }
+
+            private void 邮件参数配置ToolStripMenuItem_Click(object sender, EventArgs e)
+            {
+                FrmMail FM = new FrmMail();
+                FM.Show();
             }
         }
-
-        private void 邮件参数配置ToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            FrmMail FM = new FrmMail();
-            FM.Show();
-        }
-    }
     namespace HoraceOriginal
     {
         [DataContractAttribute(Namespace = "Horace")]
@@ -2539,6 +2655,27 @@ namespace BackStageSur
             [DataMember]
             public string Message
             { get; set; }
+        }
+
+        class CompletedAsyncResult<T> : IAsyncResult
+        {
+            Task<T> task;
+            ManualResetEvent waitHandle = new ManualResetEvent(false);
+
+            public CompletedAsyncResult(Task<T> task)
+            {
+                this.task = task;
+                task.ContinueWith(_ => waitHandle.Set());
+            }
+
+            #region IAsyncResult Members
+
+            public object AsyncState { get { return task.Result; } }
+            public WaitHandle AsyncWaitHandle { get { return waitHandle; } }
+            public bool CompletedSynchronously { get { return true; } }
+            public bool IsCompleted { get { return task.IsCompleted; } }
+
+            #endregion
         }
 
     }
