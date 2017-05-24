@@ -2,7 +2,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Text;
 
 
 
@@ -17,9 +16,8 @@ namespace BackStageSur
         /// </summary>
         public async void WriteLogFile(string input, string p)
         {
-            string s = p.Trim();
-            string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM") + "\\" + s + ""; //指定日志文件的目录
-            string filename = "" + DateTime.Now.ToString("dd") + "" + s + "用户日志.log";//定义文件信息对象
+            string sFilePath = "D:\\" + DateTime.Now.ToString("yyyyMM") + "\\" + p + ""; //指定日志文件的目录
+            string filename = "" + DateTime.Now.ToString("dd") + "" + p + "用户日志.log";//定义文件信息对象
             string fpath = sFilePath + "\\" + filename; //文件的绝对路径
             FileInfo finfo = new FileInfo(fpath);
             if (!Directory.Exists(sFilePath))//验证路径是否存在
@@ -40,7 +38,7 @@ namespace BackStageSur
             if (Used(fpath) == 0)//确认文件是否占用
             {
                 FileStream fs = new FileStream(fpath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);//创建写流，读写共享模式
-                StreamWriter w = new StreamWriter(fs,Encoding.UTF8);//根据上面创建的文件流创建写数据流
+                StreamWriter w = new StreamWriter(fs);//根据上面创建的文件流创建写数据流
                 w.BaseStream.Seek(0, SeekOrigin.End);//设置写数据流的起始位置为文件流的末尾
                 await w.WriteAsync(input + "\r\n");//异步写入并换行
                 await w.FlushAsync();//清空缓冲区内容，并把缓冲区内容写入基础流
@@ -51,7 +49,7 @@ namespace BackStageSur
                 mux.WaitOne();//同步基元等待释放
                 using (FileStream fs = finfo.OpenWrite())//创建只写流
                 {
-                    StreamWriter w = new StreamWriter(fs,Encoding.UTF8);//根据上面创建的文件流创建写数据流
+                    StreamWriter w = new StreamWriter(fs);//根据上面创建的文件流创建写数据流
                     w.BaseStream.Seek(0, SeekOrigin.End);//设置写数据流的起始位置为文件流的末尾
                     await w.WriteAsync(input + "\r\n");//异步写入并换行
                     await w.FlushAsync();//清空缓冲区内容，并把缓冲区内容写入基础流
@@ -86,13 +84,11 @@ namespace BackStageSur
             try
             {
                 string connstr = "Server=124.161.78.133;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
-                string t = DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff");
-                string InsNtbd = "INSERT INTO sur.tb_log(clientid,action,\"time\",success)VALUES(@clientid,@action,@success,@time); ";
+                string InsNtbd = "INSERT INTO sur.tb_log(clientid,action,success)VALUES(@clientid,@action,@success); ";
                 Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
                 myconnping.Open();
                 mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = clientid.Trim();
-                mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = t;
                 mycommping.Parameters.Add("@action", NpgsqlTypes.NpgsqlDbType.Varchar, 100).Value = action;
                 mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = success;
                 int x = await mycommping.ExecuteNonQueryAsync();
