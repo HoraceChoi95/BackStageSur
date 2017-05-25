@@ -2332,6 +2332,126 @@ namespace BackStageSur
                 }
             }
 
+
+            public double SelNtbErrRate(int netboardid, string p, DateTime starttime, DateTime endtime)
+            {
+                string s = p;
+                int ntbid = netboardid;
+                string stime = starttime.ToString();
+                string etime = endtime.ToString();
+                try
+                {
+                    string sqlstrSNER = "select round((select count(*) as fou from tb_error where tb_error.netboardid="+ntbid+" and time >= '"+stime+"'::timestamp and time <= '"+etime+"'::timestamp and tb_error.serviceid is null  )::numeric/(select count(*) as fou from tb_ntbdata where tb_ntbdata.netboardid="+ntbid+" and time >= '"+stime+"'::timestamp and time <= '"+etime+"'::timestamp )::numeric,4)";
+                    Npgsql.NpgsqlConnection myconnSNER = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommSNER = new Npgsql.NpgsqlCommand(sqlstrSNER, myconnSNER);
+                    myconnSNER.Open();
+                    double i = Convert.ToDouble(mycommSNER.ExecuteScalar());
+                    myconnSNER.Close();
+                    myconnSNER.Dispose();
+                    mycommSNER.Dispose();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从" + stime + "到" + etime + "时间段错误率，成功"), point);
+                    return i;
+                }
+
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + netboardid + "号网卡最近从" + stime + "到" + etime + "时间段错误率，数据库写入失败"), point);
+                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                }
+                catch (TimeoutException te)//如果数据库未在侦听
+                {
+                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                }
+            }
+
+            public double SelSvcErrRate(int serviceid, string p, DateTime starttime, DateTime endtime)
+            {
+                string s = p;
+                int svcid = serviceid;
+                string stime = starttime.ToString();
+                string etime = endtime.ToString();
+                try
+                {
+                    string sqlstrSNER = "select round((select count(*) as fou from tb_error where tb_error.serviceid=" + svcid + " and time >= '" + stime + "'::timestamp and time <= '" + etime + "'::timestamp )::numeric/(select count(*) as fou from tb_svcdata where tb_svcdata.serviceid=" + svcid + " and time >= '" + stime + "'::timestamp and time <= '" + etime + "'::timestamp )::numeric,4)";
+                    Npgsql.NpgsqlConnection myconnSNER = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommSNER = new Npgsql.NpgsqlCommand(sqlstrSNER, myconnSNER);
+                    myconnSNER.Open();
+                    double i = Convert.ToDouble(mycommSNER.ExecuteScalar());
+                    myconnSNER.Close();
+                    myconnSNER.Dispose();
+                    mycommSNER.Dispose();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + svcid + "号服务最近从" + stime + "到" + etime + "时间段错误率，成功"), point);
+                    return i;
+                }
+
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    " + p + "用户查询" + svcid + "号网卡最近从" + stime + "到" + etime + "时间段错误率，数据库写入失败"), point);
+                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                }
+                catch (TimeoutException te)//如果数据库未在侦听
+                {
+                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                }
+            }
+
+            public DataSet SelLog(string employid, DateTime starttime, DateTime endtime)
+            {
+                string s = employid;
+                string stime = starttime.ToString();
+                string etime = endtime.ToString();
+                try
+                {
+                    string sqlstrSL = "select * from tb_log where tb_log.clientid='" + s + "' and time >= '" + stime + "'::timestamp and time <= '" + etime + "'::timestamp order by time desc";
+                    Npgsql.NpgsqlConnection myconnSL = new Npgsql.NpgsqlConnection(connstr);
+                    Npgsql.NpgsqlCommand mycommSL = new Npgsql.NpgsqlCommand(sqlstrSL, myconnSL);
+                    Npgsql.NpgsqlDataAdapter myda = new Npgsql.NpgsqlDataAdapter(sqlstrSL, myconnSL);
+                    myconnSL.Open();
+                    DataTable dtSL = new DataTable("日志");
+                    DataSet dsSL = new DataSet("Logs");
+                    mycommSL.CommandText = sqlstrSL;
+                    myda.SelectCommand.CommandText = sqlstrSL;
+                    myda.Fill(dtSL);
+                    dsSL.Tables.Add(dtSL);
+                    myconnSL.Close();
+                    myconnSL.Dispose();
+                    mycommSL.Dispose();
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询" + s + "从" + stime + "到" + etime + "时间段日志，成功"), point);
+                    return dsSL;
+                }
+
+                catch (Npgsql.NpgsqlException ne)//如果数据库连接过程中报错
+                {
+                    SendMailAsync("horacewebb95@gmail.com", null, "数据库连接过程中报错,请尽快排查SQL语句!");
+                    server.SendTo(Encoding.UTF8.GetBytes(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    用户查询" + s + "从" + stime + "到" + etime + "时间段日志，数据库写入失败"), point);
+                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库连接过程中报错,请尽快排查SQL语句!", "System");
+                    var nerror = new WCFError("Select", ne.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(nerror, nerror.Message);//抛出错误
+
+                }
+                catch (TimeoutException te)//如果数据库未在侦听
+                {
+                    SendMailAsync("horacewebb95@gmail.com", null, "数据库未在侦听,请检查数据库实例!");
+                    log.WriteLogFile(DateTime.Now.ToString("yyyy-MM-dd HH：mm：ss：ffff") + "    数据库未在侦听,请检查数据库实例!", "System");
+                    var terror = new WCFError("Select", te.Message.ToString());//实例化WCFError，将错误信息传入WCFError
+                    throw new FaultException<WCFError>(terror, terror.Message);//抛出错误
+                }
+            }
+
             public async void SendMailAsync(string adress, string cc, string message)
             {
                 MailAddress MailFrom = new MailAddress(Log.MailFrom);
@@ -2472,8 +2592,18 @@ namespace BackStageSur
             [OperationContract]
             [FaultContract(typeof(WCFError))]
             DataSet SelEmerSvr(string employid, string clientid);
-           
-           
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            double SelNtbErrRate(int netboardid, string p, DateTime starttime, DateTime endtime);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            double SelSvcErrRate(int serviceid, string p, DateTime starttime, DateTime endtime);
+            [OperationContract]
+            [FaultContract(typeof(WCFError))]
+            DataSet SelLog(string employid, DateTime starttime, DateTime endtime);
+
+
+
 
         }
 

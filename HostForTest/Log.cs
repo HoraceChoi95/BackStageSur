@@ -85,13 +85,14 @@ namespace BackStageSur
             try
             {
                 string connstr = "Server=124.161.78.133;Port=9620;Database=BackStageSur;Uid=postgres;Pwd=swjtu;";
-                string InsNtbd = "INSERT INTO sur.tb_log(clientid,action,success)VALUES(@clientid,@action,@success); ";
+                string InsNtbd = "INSERT INTO sur.tb_log(clientid,action,success,\"time\")VALUES(@clientid,@action,@success,@time); ";
                 Npgsql.NpgsqlConnection myconnping = new Npgsql.NpgsqlConnection(connstr);
                 Npgsql.NpgsqlCommand mycommping = new Npgsql.NpgsqlCommand(InsNtbd, myconnping);
                 myconnping.Open();
                 mycommping.Parameters.Add("@clientid", NpgsqlTypes.NpgsqlDbType.Char, 10).Value = clientid.Trim();
                 mycommping.Parameters.Add("@action", NpgsqlTypes.NpgsqlDbType.Varchar, 100).Value = action;
                 mycommping.Parameters.Add("@success", NpgsqlTypes.NpgsqlDbType.Boolean).Value = success;
+                mycommping.Parameters.Add("@time", NpgsqlTypes.NpgsqlDbType.Timestamp).Value = DateTime.Now.ToLongTimeString();
                 int x = await mycommping.ExecuteNonQueryAsync();
                 myconnping.Close();
             }
